@@ -9,7 +9,9 @@ authors = [
 requires-python = ">=3.11"
 dependencies = [
     "ifcopenshell>=0.8.4.post1",
+    "ifctester>=0.8.4",
     "loguru>=0.7.3",
+    "pydantic>=2.12.5",
 ]
 
 [build-system]
