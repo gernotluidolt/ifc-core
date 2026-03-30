@@ -1,0 +1,29 @@
+# --- Python Environment ---
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+.python-version
+
+# --- UV & Package Managers ---
+dist/
+build/
+*.egg-info/
+
+# --- Tooling & IDEs ---
+.ruff_cache/
+.pytest_cache/
+.mypy_cache/
+.vscode/
+.idea/
+
+# --- IFC / BIM Specific ---
+*.ifc
+*.ifczip
+*.bak
+logs/
+*.log
+
+# --- Windows System Files ---
+Thumbs.db
+Desktop.ini

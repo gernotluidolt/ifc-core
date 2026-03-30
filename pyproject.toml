@@ -1,0 +1,22 @@
+[project]
+name = "ifc-core"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Gernot Luidolt", email = "gernot.luidolt@swietelsky.at" }
+]
+requires-python = ">=3.11"
+dependencies = [
+    "ifcopenshell>=0.8.4.post1",
+    "loguru>=0.7.3",
+]
+
+[build-system]
+requires = ["uv_build>=0.11.2,<0.12.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "ruff>=0.15.8",
+]
