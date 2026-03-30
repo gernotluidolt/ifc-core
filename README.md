@@ -65,7 +65,7 @@ The project uses a **Service-Layer Pattern** to keep logic decoupled and scalabl
 
 ```text
 src/ifc_core/
-├── store.py           # IFC Entry Point (IfcStore)
+├── ifc_store.py           # IFC Entry Point (IfcStore)
 ├── ids_store.py       # IDS Entry Point (IdsStore)
 ├── models/            # Pydantic Data Schemas
 │   ├── ifc.py         # IFC Metadata & Results
