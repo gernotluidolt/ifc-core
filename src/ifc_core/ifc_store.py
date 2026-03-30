@@ -6,7 +6,6 @@ from ifc_core.models.ids import SpecificationManifest
 from ifc_core.services.writer import (
     add_pset_to_element,
     apply_manifest_to_element,
-    apply_manifest_to_element,
 )
 from .models.ifc import ModelMetadata, ModificationResult
 from .services.metadata import get_model_info

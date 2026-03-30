@@ -1,5 +1,5 @@
 # src/ifc_core/__init__.py
-from .store import IfcStore
+from .ifc_store import IfcStore
 from .ids_store import IdsStore
 from .models.ifc import ModelMetadata, ModificationResult
 from .models.ids import (
