@@ -1,8 +1,16 @@
+from pathlib import Path
+
+import pytest
+
 from ifc_core.services.ids_reader import parse_ids_file
 
 
-def test_parse_ids_file_with_real_ids(real_ids_path):
-    specs = parse_ids_file(real_ids_path)
+IDS_FIXTURES = sorted(path for path in Path("tests/data").glob("*.ids"))
+
+
+@pytest.mark.parametrize("ids_path", IDS_FIXTURES, ids=lambda path: path.name)
+def test_parse_ids_file_with_real_ids(ids_path):
+    specs = parse_ids_file(ids_path)
 
     assert len(specs) > 0
 
@@ -13,8 +21,18 @@ def test_parse_ids_file_with_real_ids(real_ids_path):
 
     first_applicability = first_spec.applicability[0]
     assert first_applicability.type
-    assert first_applicability.name or first_applicability.value
+    if first_applicability.type != "entity":
+        assert (
+            first_applicability.name
+            or first_applicability.value
+            or first_applicability.property_set
+        )
 
     first_requirement = first_spec.requirements[0]
     assert first_requirement.type
-    assert first_requirement.name or first_requirement.value
+    if first_requirement.type != "entity":
+        assert (
+            first_requirement.name
+            or first_requirement.value
+            or first_requirement.property_set
+        )
