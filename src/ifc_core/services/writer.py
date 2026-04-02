@@ -48,7 +48,7 @@ class ManifestWriter:
                 return ModificationResult(success=True, msg=f"Set Attribute {req.name}")
                 
             elif req_type == "entity":
-                ifcopenshell.api.run("root.reassign_class", self.model, product=element, new_class=req.value)
+                ifcopenshell.api.run("root.reassign_class", self.model, product=element, ifc_class=req.value)
                 return ModificationResult(success=True, msg=f"Reassigned class to {req.value}")
                 
             elif req_type == "material":
