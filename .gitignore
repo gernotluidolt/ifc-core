@@ -27,3 +27,6 @@ logs/
 # --- Windows System Files ---
 Thumbs.db
 Desktop.ini
+
+tests/data/*
+.coverage

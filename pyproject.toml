@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 authors = [
-    { name = "Gernot Luidolt", email = "gernot.luidolt@swietelsky.at" }
+    { name = "Gernot Luidolt", email = "gernot@luido.lt" }
 ]
 requires-python = ">=3.11"
 dependencies = [
@@ -20,5 +20,7 @@ build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
+    "pytest>=9.0.2",
+    "pytest-cov>=7.1.0",
     "ruff>=0.15.8",
 ]
