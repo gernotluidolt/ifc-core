@@ -85,11 +85,11 @@ The `IfcStore` class manages the following "Engine" methods:
 | **Method**             | **Input**      | **Returns**         | **Implementation Detail**                         |
 | ---------------------- | -------------- | ------------------- | ------------------------------------------------- |
 | `get_model_metadata()` | -              | `ModelMetadata`     | Extract from Header and `IfcProject`.             |
-| `get_spatial_tree()`   | `parent_guid`  | `List[SpatialNode]` | If `parent_guid` is None, return Sites.           |
-| `get_psets()`          | -              | `List[PSetSummary]` | Scan model for all unique `IfcPropertySet` names. |
-| `get_materials()`      | -              | `List[CountedItem]` | Scan all `IfcMaterial` associations.              |
-| **`execute_query()`**  | `ComplexQuery` | `List[str]`         | Recursive GUID filter.                            |
-| **`analyze_guids()`**  | `List[str]`    | `SelectionAnalysis` | Data intersection logic.                          |
+| `get_spatial_tree()`   | `parent_guid`  | `List[SpatialNode]` | Translates implicit decomposition dynamically rendering leaf nodes virtually resolving IFC Classes within `IfcBuildingStorey`. |
+| `get_psets()`          | -              | `List[PSetSummary]` | Scan model for all unique `IfcPropertySet` names tracking quantity endpoints continuously tracking occurrences. |
+| `get_materials()`      | -              | `List[CountedItem]` | Scan all `IfcMaterial` associations mapping recursively iterating over layersets natively. |
+| **`execute_query()`**  | `ComplexQuery` | `List[str]`         | Comprehensive recursive evaluation enforcing `AND/OR/NOT` comparisons scaling `Materials`, existence assertions, and mapped properties. |
+| **`analyze_guids()`**  | `List[str]`    | `SelectionAnalysis` | Intersects common overlaps explicitly resolving edge `<Mixed>` property occurrences seamlessly identifying discrepancies natively. |
 
 ## 5. Mapping State & Progress DTOs
 These models allow the App to show a "Dashboard" or "Progress Bar" of the enrichment work.

@@ -21,6 +21,9 @@ src/ifc_core/
     ├── ids_reader.py  # IDS 1.0 parser (extracts enumerations/options/ranges)
     ├── writer.py      # ifcopenshell.api wrapper for PSets/Attributes/Materials
     ├── validator.py   # Independent engine for Mapping Status lifecycle
+    ├── discovery.py   # Data extraction for visual topology (Sites, Buildings, Materials)
+    ├── inspector.py   # Multi-element intersection computing algorithms
+    ├── query.py       # Iterative Query Engine with ComplexQuery tree traversal
     └── metadata.py    # IFC Header/Schema extraction
 ```
 
@@ -39,4 +42,6 @@ We have established a strict boundary to prevent "guesswork" in the package:
 ## 🚀 Current Implementation Scope
 1. **Validation Logic (`validator.py`):** Calculates structural alignments mapping element geometries directly against `Specification` schemas yielding `MappingState`.
 2. **Advanced Writers (`writer.py`):** Includes `ManifestWriter` with scoped material-caching resolving complex classifications cleanly in bulk.
-3. **Query Optimizations:** Features transient context caching within `IfcStore` during complex API requests that systematically invalidates to preserve the system's stateless definition.
+3. **Query Engine (`query.py` & `ifc_store.py`):** Recursive engine handling `ComplexQuery` iterations mapping over `Attributes`, `Materials`, and transient `MappingStatus` cache operations systematically scaling.
+4. **Discovery Services (`discovery.py`):** Drives UI Dashboards securely yielding localized metadata (`CountedItem`, `PSetSummary`) with specialized Virtual Node logic streamlining recursive `get_spatial_tree` visual interactions.
+5. **Element Analytics (`inspector.py`):** Handles deep contextual element grouping detecting `<Mixed>` attributes safely during selections.
