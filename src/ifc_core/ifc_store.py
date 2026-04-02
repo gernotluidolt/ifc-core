@@ -7,9 +7,16 @@ from ifc_core.services.writer import (
     apply_manifest_to_element,
     ManifestWriter
 )
-from .models.ifc import ModelMetadata, ModificationResult, MappingStatus, ModelMappingSummary, BulkSpecificationManifest, MappingState
+from .models.ifc import (
+    ModelMetadata, ModificationResult, MappingStatus, ModelMappingSummary, 
+    BulkSpecificationManifest, MappingState, SpatialNode, CountedItem, 
+    PSetSummary, SelectionAnalysis, ComplexQuery
+)
 from .services.metadata import get_model_info
 from .services.validator import check_mapping_status as validate_mapping_status
+from .services.discovery import get_spatial_tree, get_psets, get_materials
+from .services.inspector import analyze_guids
+from .services.query import QueryEngine
 from .ids_store import IdsStore
 
 
@@ -36,6 +43,44 @@ class IfcStore:
         self._model.write(str(save_to))
         self._clear_cache()
 
+    # -------------------------------------------------------------------------
+    # DISCOVERY API
+    # -------------------------------------------------------------------------
+
+    def get_spatial_tree(self, parent_guid: Optional[str] = None) -> List[SpatialNode]:
+        """Creates the visual topology mapping Sites -> Buildings -> Storey -> Entities"""
+        return get_spatial_tree(self._model, parent_guid)
+
+    def get_psets(self) -> List[PSetSummary]:
+        """Provides a map of all PSets assigned within the document and their parameters."""
+        return get_psets(self._model)
+
+    def get_materials(self) -> List[CountedItem]:
+        """Lists all established materials and the number of elements using them."""
+        return get_materials(self._model)
+
+    # -------------------------------------------------------------------------
+    # QUERY & INSPECTION ENGINE
+    # -------------------------------------------------------------------------
+
+    def analyze_guids(self, guids: List[str]) -> SelectionAnalysis:
+        """Performs data intersection across multiple geometry elements checking commonalities."""
+        return analyze_guids(self._model, guids)
+
+    def execute_query(self, query: ComplexQuery, ids_store: Optional[IdsStore] = None) -> List[str]:
+        """
+        Recursive GUID filter functionality. 
+        Supports MappingStatus filtering recursively across nested conditions.
+        """
+        engine = QueryEngine(self._model)
+        if ids_store:
+            engine.inject_context(self, ids_store)
+        return engine.execute(query)
+
+    # -------------------------------------------------------------------------
+    # MODIFICATION & MAPPING ENGINE
+    # -------------------------------------------------------------------------
+
     def apply_specification(
         self, manifest: SpecificationManifest
     ) -> List[ModificationResult]:
@@ -49,7 +94,7 @@ class IfcStore:
         self, manifest: BulkSpecificationManifest
     ) -> List[ModificationResult]:
         """
-        Efficiently writes the same data to multiple Express IDs.
+        Efficiently writes the same data to multiple Express IDs natively.
         """
         self._clear_cache()
         writer = ManifestWriter(self._model)
@@ -119,67 +164,3 @@ class IfcStore:
             )
             for name, data in summaries_dict.items()
         ]
-
-    def execute_query(self, query: Any, ids_store: Optional[IdsStore] = None) -> List[str]:
-        """
-        Recursive GUID filter functionality. 
-        Supports MappingStatus filtering if ids_store is provided.
-        """
-        # ComplexQuery is partially defined but we strictly handle MappingStatus here
-        matched_guids = []
-        
-        # basic handler just for the MappingStatus logic
-        # query criteria is expected to be handled recursively
-        
-        # A simple flat check to demonstrate the integration:
-        # User queries (Category == "MappingStatus") AND (MappingStatus == "INCOMPLETE")
-        if not hasattr(query, "criteria"):
-            return []
-        
-        # Fallback to get elements. True engine uses complete recursive filtering.
-        elements = self._model.by_type("IfcProduct")
-        
-        for element in elements:
-            guid = getattr(element, "GlobalId", None)
-            if not guid:
-                continue
-            
-            # Simple match evaluation for demo
-            matches_all = True
-            for criterion in query.criteria:
-                if getattr(criterion, "category", "") == "MappingStatus":
-                    if not ids_store:
-                        matches_all = False
-                        break
-                        
-                    # find the spec
-                    spec_name = getattr(criterion, "property_set", None) # Assuming property_set holds spec_name
-                    # or it checks all statuses.
-                    
-                    found_match = False
-                    # Use cache to check mapping status 
-                    for spec in ids_store.specifications:
-                        # Only target this spec if it's explicitly named
-                        if spec_name and spec.name != spec_name:
-                            continue
-                            
-                        cache_key = f"{guid}_{spec.name}"
-                        if cache_key in self._mapping_cache:
-                            status = self._mapping_cache[cache_key]
-                        else:
-                            status = validate_mapping_status(element, spec)
-                            self._mapping_cache[cache_key] = status
-                            
-                        if status.state.value == criterion.value:
-                            found_match = True
-                            break
-                            
-                    if not found_match:
-                        matches_all = False
-                        break
-                # existing properties logic here...
-            
-            if matches_all:
-                matched_guids.append(guid)
-                
-        return matched_guids
