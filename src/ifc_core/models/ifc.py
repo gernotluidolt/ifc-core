@@ -76,7 +76,7 @@ class ComparisonOperator(str, Enum):
 
 class FilterCriterion(BaseModel):
     category: str # "Attribute", "PSet", "Material", "Story", "MappingStatus"
-    name: str     # e.g., "LoadBearing", "Height"
+    name: Optional[str] = None # e.g., "LoadBearing". None if checking just Pset/Material existence
     operator: ComparisonOperator
     value: Any
     property_set: Optional[str] = None # Required if category == "PSet"

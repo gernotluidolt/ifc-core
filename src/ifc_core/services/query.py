@@ -25,6 +25,13 @@ class QueryEngine:
                 
         elif category == "pset":
             psets = ifcopenshell.util.element.get_psets(element)
+            
+            # If name is omitted, short circuit to true if container matched
+            if not criterion.name:
+                if criterion.property_set in psets:
+                    return True
+                return False
+                
             if criterion.property_set in psets and criterion.name in psets[criterion.property_set]:
                 val = psets[criterion.property_set][criterion.name]
                 
@@ -57,6 +64,15 @@ class QueryEngine:
                     if status and status.state.value == criterion.value:
                         return True
             return False
+            
+        elif category == "material":
+            material = ifcopenshell.util.element.get_material(element)
+            if material:
+                if material.is_a("IfcMaterialLayerSetUsage"):
+                    mset = getattr(material, "ForLayerSet", None)
+                    if mset: val = getattr(mset, "MaterialSetName", None)
+                if not val:
+                    val = getattr(material, "Name", None)
 
         return self._compare(val, criterion.value, criterion.operator)
 
