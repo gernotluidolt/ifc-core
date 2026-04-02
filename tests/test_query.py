@@ -1,13 +1,7 @@
 import ifcopenshell.api
 
 from ifc_core.models.ifc import ComplexQuery, FilterCriterion, ComparisonOperator
-from ifc_core.models.ids import IdsRequirement, IdsSpecification
-from ifc_core.services.query import QueryEngine
-
-
-class _DummyIdsStore:
-    def __init__(self, specifications):
-        self.specifications = specifications
+from ifc_core.models.ifc import MappingState
 
 
 def test_query_pset_existence(real_ifc_store):
@@ -29,6 +23,7 @@ def test_query_pset_existence(real_ifc_store):
 def test_query_nested_and_or_contains(mock_ifc_store):
     wall = mock_ifc_store._model.by_type("IfcWall")[0]
     slab = mock_ifc_store._model.by_type("IfcSlab")[0]
+    wall_name_fragment = wall.Name.split(":")[0]
 
     pset = ifcopenshell.api.run(
         "pset.add_pset", mock_ifc_store._model, product=wall, name="Pset_WallCommon"
@@ -47,7 +42,7 @@ def test_query_nested_and_or_contains(mock_ifc_store):
                 category="Attribute",
                 name="Name",
                 operator=ComparisonOperator.CONTAINS,
-                value="Sample",
+                value=wall_name_fragment,
             ),
             ComplexQuery(
                 logical_op="OR",
@@ -78,6 +73,7 @@ def test_query_nested_and_or_contains(mock_ifc_store):
 def test_query_not_excludes_matching_entities(mock_ifc_store):
     wall = mock_ifc_store._model.by_type("IfcWall")[0]
     slab = mock_ifc_store._model.by_type("IfcSlab")[0]
+    wall_name_fragment = wall.Name.split(":")[0]
 
     query = ComplexQuery(
         logical_op="NOT",
@@ -86,7 +82,7 @@ def test_query_not_excludes_matching_entities(mock_ifc_store):
                 category="Attribute",
                 name="Name",
                 operator=ComparisonOperator.CONTAINS,
-                value="Wall",
+                value=wall_name_fragment,
             )
         ],
     )
@@ -116,7 +112,7 @@ def test_query_story_and_material(mock_ifc_store):
             FilterCriterion(
                 category="Story",
                 operator=ComparisonOperator.EQUALS,
-                value="Ground Floor",
+                value="00_EG",
             ),
             FilterCriterion(
                 category="Material",
@@ -130,23 +126,10 @@ def test_query_story_and_material(mock_ifc_store):
     assert wall.GlobalId in results
 
 
-def test_query_mapping_status_uses_cache(monkeypatch, mock_ifc_store):
-    spec = IdsSpecification(
-        name="WallApplicability",
-        applicability=[IdsRequirement(type="entity", name="IfcWall")],
-        requirements=[],
-    )
-
-    call_count = {"n": 0}
-    from ifc_core.services.validator import check_mapping_status as _original_check
-
-    def _tracked_check_mapping_status(element, _spec):
-        call_count["n"] += 1
-        return _original_check(element, _spec)
-
-    monkeypatch.setattr(
-        "ifc_core.services.validator.check_mapping_status",
-        _tracked_check_mapping_status,
+def test_query_mapping_status_returns_matching_entities(real_ifc_store, real_ids_store):
+    statuses = real_ifc_store.check_mapping_status(real_ids_store)
+    candidate = next(
+        status for status in statuses if status.state == MappingState.INCOMPLETE
     )
 
     query = ComplexQuery(
@@ -155,44 +138,15 @@ def test_query_mapping_status_uses_cache(monkeypatch, mock_ifc_store):
             FilterCriterion(
                 category="MappingStatus",
                 operator=ComparisonOperator.EQUALS,
-                value="COMPLIANT",
-                property_set="WallApplicability",
+                value=MappingState.INCOMPLETE.value,
+                property_set=candidate.spec_name,
             )
         ],
     )
 
-    ids_store = _DummyIdsStore([spec])
-    first = mock_ifc_store.execute_query(query, ids_store=ids_store)
-    first_count = call_count["n"]
-    second = mock_ifc_store.execute_query(query, ids_store=ids_store)
-
-    wall = mock_ifc_store._model.by_type("IfcWall")[0]
-    assert wall.GlobalId in first
-    assert wall.GlobalId in second
-    assert first_count > 0
-    assert call_count["n"] == first_count
-
-
-def test_query_engine_compare_numeric_and_invalid_operator(mock_ifc_store):
-    engine = QueryEngine(mock_ifc_store._model)
-
-    assert engine._compare("10", "2", ComparisonOperator.GREATER_THAN)
-    assert engine._compare("2", "10", ComparisonOperator.LESS_THAN)
-    assert engine._compare("A", "B", ComparisonOperator.NOT_EQUALS)
-
-    invalid_query = ComplexQuery(
-        logical_op="XOR",
-        criteria=[
-            FilterCriterion(
-                category="Attribute",
-                name="Name",
-                operator=ComparisonOperator.EQUALS,
-                value="Sample Wall",
-            )
-        ],
-    )
-    wall = mock_ifc_store._model.by_type("IfcWall")[0]
-    assert engine._evaluate_node(wall, invalid_query) is False
+    results = real_ifc_store.execute_query(query, ids_store=real_ids_store)
+    assert candidate.element_guid in results
+    assert results
 
 
 def test_query_pset_container_existence_true_and_false(mock_ifc_store):

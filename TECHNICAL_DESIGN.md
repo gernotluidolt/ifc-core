@@ -167,7 +167,7 @@ The **Query Engine** (`ComplexQuery`) must now support a new category: `MappingS
 
 ## 9. Architectural Guardrails (Mapping Edition)
 
-1. **On-the-Fly Analysis:** Mapping status should be calculated dynamically by comparing the IFC model to the IDS store. Do not rely on hardcoded "Status" properties in the IFC file, as they can become out of sync. All requests must be executed directly against the model with no caching mechanisms, to ensure strict real-time accuracy.
+1. **On-the-Fly Analysis:** Mapping status should be calculated dynamically by comparing the IFC model to the IDS store. Do not rely on hardcoded "Status" properties in the IFC file, as they can become out of sync. The current implementation may keep store-local results for repeated lookups within the same `IfcStore` instance, but that is an internal optimization and not part of the public contract.
 
 2. **Entity Type Modification (UNMAPPED):** Handled transparently by the `ManifestWriter` when `type == "Entity"` permitting direct mutations (via `root.reassign_class`) mapping elements like `IfcBuildingElementProxy` automatically mid-manifest.
 

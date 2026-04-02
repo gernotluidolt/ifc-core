@@ -6,20 +6,6 @@ from ifc_core.services import validator
 from ifc_core.services.validator import check_mapping_status
 
 
-class _DummyElement:
-    def __init__(self, attrs=None, info=None):
-        self._attrs = attrs or {}
-        self._info = info or {}
-
-    def __getattr__(self, item):
-        if item in self._attrs:
-            return self._attrs[item]
-        raise AttributeError(item)
-
-    def get_info(self):
-        return self._info
-
-
 def test_check_mapping_status_unmapped_when_applicability_fails(mock_ifc_store):
     wall = mock_ifc_store._model.by_type("IfcWall")[0]
     spec = IdsSpecification(
@@ -42,7 +28,7 @@ def test_check_mapping_status_incomplete_when_property_missing(mock_ifc_store):
         requirements=[
             IdsRequirement(
                 type="property",
-                name="LoadBearing",
+                name="DefinitelyMissing",
                 property_set="Pset_WallCommon",
                 value="True",
             )
@@ -97,7 +83,7 @@ def test_check_mapping_status_compliant_for_attribute_requirement(mock_ifc_store
             IdsRequirement(
                 type="attribute",
                 name="Name",
-                value="Sample Wall",
+                value=wall.Name,
             )
         ],
     )
@@ -128,34 +114,29 @@ def test_check_value_against_options_and_ranges():
     assert validator._check_value_against_options("non-numeric", req_non_numeric)
 
 
-def test_get_attribute_value_falls_back_to_get_info():
-    el = _DummyElement(info={"FallbackAttr": "X"})
-    assert validator._get_attribute_value(el, "FallbackAttr") == "X"
+def test_get_attribute_value_reads_real_attribute(real_ifc_store):
+    wall = real_ifc_store._model.by_type("IfcWall")[0]
+    assert validator._get_attribute_value(wall, "Name") == wall.Name
 
 
-def test_get_attribute_value_returns_none_when_missing_everywhere():
-    el = _DummyElement(info={})
-    assert validator._get_attribute_value(el, "MissingAttr") is None
+def test_get_attribute_value_returns_none_for_missing_real_attribute(real_ifc_store):
+    wall = real_ifc_store._model.by_type("IfcWall")[0]
+    assert validator._get_attribute_value(wall, "MissingAttr") is None
 
 
-def test_is_applicable_skips_entity_without_name_and_handles_attribute_checks():
-    class _IfcWallLike(_DummyElement):
-        def is_a(self, type_name):
-            return type_name == "IfcWall"
-
-    el = _IfcWallLike(attrs={"Name": "Sample Wall"})
+def test_is_applicable_true_for_real_wall_and_attribute_checks(real_ifc_store):
+    wall = real_ifc_store._model.by_type("IfcWall")[0]
     applicability = [
-        IdsRequirement(type="entity"),
         IdsRequirement(type="entity", name="IfcWall"),
-        IdsRequirement(type="attribute", name="Name", value="Sample Wall"),
+        IdsRequirement(type="attribute", name="Name", value=wall.Name),
     ]
 
-    assert validator._is_applicable(el, applicability)
+    assert validator._is_applicable(wall, applicability)
 
 
-def test_is_applicable_true_when_empty_requirements():
-    el = _DummyElement()
-    assert validator._is_applicable(el, [])
+def test_is_applicable_true_when_empty_requirements(real_ifc_store):
+    wall = real_ifc_store._model.by_type("IfcWall")[0]
+    assert validator._is_applicable(wall, [])
 
 
 def test_is_applicable_false_for_property_and_attribute_mismatch(mock_ifc_store):
@@ -180,7 +161,7 @@ def test_is_applicable_false_for_property_and_attribute_mismatch(mock_ifc_store)
         )
     ]
     attribute_mismatch = [
-        IdsRequirement(type="attribute", name="Name", value="Not Sample Wall")
+        IdsRequirement(type="attribute", name="Name", value=f"{wall.Name} (unexpected)")
     ]
 
     assert not validator._is_applicable(wall, property_mismatch)

@@ -78,7 +78,7 @@ ifc.save("Building_Updated.ifc")
 ## 🏗️ Project Structure
 ```text
 src/ifc_core/
-├── store.py           # IFC Entry Point (IfcStore)
+├── ifc_store.py       # IFC Entry Point (IfcStore)
 ├── ids_store.py       # IDS Entry Point (IdsStore)
 ├── models/            # Pydantic Data Schemas
 │   ├── ifc.py         # IFC Metadata & Results
@@ -94,7 +94,7 @@ src/ifc_core/
 ```
 
 ## 🏗️ Key Capabilities
-- **State Engine:** Automatically evaluates the `MappingState` (`COMPLIANT`, `UNMAPPED`, `INCOMPLETE`, `INVALID`) across elements natively leveraging scoped query caching.
+- **State Engine:** Automatically evaluates the `MappingState` (`COMPLIANT`, `UNMAPPED`, `INCOMPLETE`, `INVALID`) across elements. The current implementation keeps store-local mapping lookup results for repeated queries within the same store instance.
 - **Bulk Operations Optimizations:** The internal `ManifestWriter` handles high-frequency assignments resolving complex schemas across thousands of geometries quickly using material memory pooling.
 - **Discovery Read-APIs:** Drives internal views executing dynamic tree traversals cleanly (creating Virtual Nodes for IFC Classes).
 - **Execution Query System:** Exposes a powerful nested parsing solution tracking objects specifically matching `Material`, `PSet` existence, checking dynamic `MappingStatus`, and recursive algorithms solving logic constraints natively.
@@ -102,6 +102,9 @@ src/ifc_core/
 - **Contract-Based Writing:** Uses `SpecificationManifest` to ensure the App resolves all choices before the package touches the IFC.
 - **Full IDS 1.0 Support:** Handles Properties, Attributes, Materials, and Classifications.
 - **Safe Modifications:** Built on top of the official `ifcopenshell.api` to ensure internal IFC data consistency.
+
+## 🧪 Tests
+The test suite is centered on the public package contract: real IDS parsing, IFC discovery, query execution, and manifest application. It intentionally avoids relying on fake IDS facets or private helper behavior.
 
 ## 🧪 Development
 ```powershell
