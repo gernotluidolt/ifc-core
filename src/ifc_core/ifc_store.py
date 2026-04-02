@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 import ifcopenshell
 
 from ifc_core.models.ids import SpecificationManifest

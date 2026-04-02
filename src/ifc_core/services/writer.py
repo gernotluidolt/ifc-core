@@ -1,5 +1,6 @@
 import ifcopenshell
 import ifcopenshell.api
+import ifcopenshell.util.element
 from typing import Dict, Any, List
 
 from ..models.ids import SpecificationManifest, ConcreteRequirement
@@ -35,7 +36,10 @@ class ManifestWriter:
         try:
             req_type = req.type.lower() if req.type else ""
             if req_type == "property":
-                pset = ifcopenshell.api.run("pset.add_pset", self.model, product=element, name=req.property_set)
+                pset = ifcopenshell.util.element.get_pset(element, req.property_set)
+                if not pset:
+                    pset = ifcopenshell.api.run("pset.add_pset", self.model, product=element, name=req.property_set)
+                    
                 ifcopenshell.api.run("pset.edit_pset", self.model, pset=pset, properties={req.name: req.value})
                 return ModificationResult(success=True, msg=f"Set Property {req.name}")
                 

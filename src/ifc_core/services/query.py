@@ -1,6 +1,6 @@
 import ifcopenshell
 import ifcopenshell.util.element
-from typing import List, Union, Any, Optional
+from typing import List, Union, Any
 from ..models.ifc import ComplexQuery, FilterCriterion, ComparisonOperator
 
 class QueryEngine:
