@@ -104,7 +104,8 @@ def get_materials(model: ifcopenshell.file) -> List[CountedItem]:
     
     for rel in model.by_type("IfcRelAssociatesMaterial"):
         mat = rel.RelatingMaterial
-        if not mat: continue
+        if not mat: 
+            continue
         
         name = getattr(mat, "Name", "") or "Unnamed"
         if mat.is_a("IfcMaterialLayerSetUsage"):

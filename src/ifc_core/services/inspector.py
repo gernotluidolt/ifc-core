@@ -23,7 +23,8 @@ def analyze_guids(model: ifcopenshell.file, guids: List[str]) -> SelectionAnalys
         
     common_attributes = {}
     for key in common_attr_keys:
-        if key in ("id", "type", "GlobalId"): continue
+        if key in ("id", "type", "GlobalId"): 
+            continue
         val1 = infos[0][key]
         is_mixed = any(info[key] != val1 for info in infos[1:])
         
@@ -46,7 +47,8 @@ def analyze_guids(model: ifcopenshell.file, guids: List[str]) -> SelectionAnalys
             
         common_psets[pset_name] = {}
         for prop in common_prop_names:
-            if prop in ("id", "type"): continue
+            if prop in ("id", "type"): 
+                continue
             val1 = all_psets[0][pset_name][prop]
             is_mixed = any(psets[pset_name][prop] != val1 for psets in all_psets[1:])
             

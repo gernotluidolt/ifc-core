@@ -39,7 +39,8 @@ class QueryEngine:
             # For 'Story', find spatial container
             for rel in getattr(element, "ContainedInStructure", []):
                 val = getattr(rel.RelatingStructure, "Name", None)
-                if val: break
+                if val: 
+                    break
 
         elif category == "mappingstatus" and self._ifc_store and self.ids_store:
             # Reusing the existing mapping logic directly
@@ -49,7 +50,8 @@ class QueryEngine:
             
             if guid:
                 for spec in self.ids_store.specifications:
-                    if spec_name and spec.name != spec_name: continue
+                    if spec_name and spec.name != spec_name: 
+                        continue
                     cache_key = f"{guid}_{spec.name}"
                     
                     status = None
@@ -70,14 +72,16 @@ class QueryEngine:
             if material:
                 if material.is_a("IfcMaterialLayerSetUsage"):
                     mset = getattr(material, "ForLayerSet", None)
-                    if mset: val = getattr(mset, "MaterialSetName", None)
+                    if mset: 
+                        val = getattr(mset, "MaterialSetName", None)
                 if not val:
                     val = getattr(material, "Name", None)
 
         return self._compare(val, criterion.value, criterion.operator)
 
     def _compare(self, actual: Any, target: Any, op: ComparisonOperator) -> bool:
-        if actual is None: return False
+        if actual is None: 
+            return False
         
         val_str = str(actual)
         target_str = str(target)
@@ -124,5 +128,6 @@ class QueryEngine:
         for el in elements:
             if self._evaluate_node(el, query):
                 guid = getattr(el, "GlobalId", None)
-                if guid: matched.append(guid)
+                if guid: 
+                    matched.append(guid)
         return matched
