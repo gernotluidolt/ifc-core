@@ -11,7 +11,9 @@ def _map_facet_to_requirement(facet) -> IdsRequirement:
         req_type = facet.__class__.__name__.lower()
 
     req_name = getattr(facet, "name", None) or getattr(facet, "baseName", None)
-    req_property_set = getattr(facet, "property_set", None) or getattr(facet, "propertySet", None)
+    req_property_set = getattr(facet, "property_set", None) or getattr(
+        facet, "propertySet", None
+    )
     options = []
     min_val = None
     max_val = None
@@ -51,7 +53,9 @@ def _map_facet_to_requirement(facet) -> IdsRequirement:
     return IdsRequirement(
         type=req_type,
         name=req_name,
-        value=str(raw_value) if raw_value is not None and not isinstance(raw_value, dict) else None,
+        value=str(raw_value)
+        if raw_value is not None and not isinstance(raw_value, dict)
+        else None,
         property_set=req_property_set,
         instructions=getattr(facet, "instructions", None),
         options=options,
