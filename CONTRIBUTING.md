@@ -45,3 +45,9 @@ We have established a strict boundary to prevent "guesswork" in the package:
 3. **Query Engine (`query.py` & `ifc_store.py`):** Recursive engine handling `ComplexQuery` iterations mapping over `Attributes`, `Materials`, and transient `MappingStatus` cache operations systematically scaling.
 4. **Discovery Services (`discovery.py`):** Drives UI Dashboards securely yielding localized metadata (`CountedItem`, `PSetSummary`) with specialized Virtual Node logic streamlining recursive `get_spatial_tree` visual interactions.
 5. **Element Analytics (`inspector.py`):** Handles deep contextual element grouping detecting `<Mixed>` attributes safely during selections.
+
+## 📝 Documentation Style
+- Use Google-style docstrings for public endpoints, properties, classes, and DTOs.
+- Start each docstring with a short summary sentence.
+- Add `Args:`, `Returns:`, and `Raises:` sections only when they clarify the contract.
+- Keep DTO docstrings concise and focused on the object's public role, not implementation details.

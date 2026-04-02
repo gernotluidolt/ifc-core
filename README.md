@@ -103,6 +103,54 @@ src/ifc_core/
 - **Full IDS 1.0 Support:** Handles Properties, Attributes, Materials, and Classifications.
 - **Safe Modifications:** Built on top of the official `ifcopenshell.api` to ensure internal IFC data consistency.
 
+## 📘 Public API Contract
+
+### IfcStore Endpoints
+
+| Method | Input | Returns | Purpose |
+| --- | --- | --- | --- |
+| `info` | - | `ModelMetadata` | File-level schema and author metadata. |
+| `save(target_path=None)` | `Path \| None` | `None` | Persists model changes and clears caches. |
+| `get_spatial_tree(parent_guid=None)` | `str \| None` | `List[SpatialNode]` | Spatial hierarchy for tree UIs. |
+| `get_psets()` | - | `List[PSetSummary]` | Property set inventory with parameter names. |
+| `get_materials()` | - | `List[CountedItem]` | Material inventory with usage counts. |
+| `analyze_guids(guids)` | `List[str]` | `SelectionAnalysis` | Common and mixed values across selection. |
+| `execute_query(query, ids_store=None)` | `ComplexQuery`, `IdsStore \| None` | `List[str]` | Recursive GUID filtering engine. |
+| `apply_specification(manifest)` | `SpecificationManifest` | `List[ModificationResult]` | Applies resolved requirements to one element. |
+| `apply_bulk_manifest(manifest)` | `BulkSpecificationManifest` | `List[ModificationResult]` | Applies resolved requirements to many elements. |
+| `check_mapping_status(ids_store)` | `IdsStore` | `List[MappingStatus]` | Per-element IDS compliance states. |
+| `get_mapping_summary(ids_store)` | `IdsStore` | `List[ModelMappingSummary]` | Dashboard-level compliance counters. |
+
+### IdsStore Endpoints
+
+| Method | Input | Returns | Purpose |
+| --- | --- | --- | --- |
+| `specifications` | - | `List[IdsSpecification]` | All specifications parsed from IDS file. |
+| `get_spec_by_name(name)` | `str` | `IdsSpecification \| None` | Fast lookup by specification name. |
+
+### Public DTOs
+
+| DTO | Role |
+| --- | --- |
+| `IdsRequirement` | Parsed IDS facet for applicability and requirements. |
+| `IdsSpecification` | One IDS specification with applicability and requirements. |
+| `ConcreteRequirement` | App-resolved value assignment unit. |
+| `SpecificationManifest` | Single-element write contract for `apply_specification`. |
+| `ModelMetadata` | IFC metadata snapshot exposed by `info`. |
+| `ModificationResult` | Result object for write operations. |
+| `MappingState` | Enum for `UNMAPPED`, `INCOMPLETE`, `INVALID`, `COMPLIANT`. |
+| `MappingStatus` | Per element/spec mapping evaluation result. |
+| `ModelMappingSummary` | Aggregated mapping counts per spec. |
+| `BulkSpecificationManifest` | Multi-element write contract for bulk application. |
+| `SpatialNode` | Recursive tree node for discovery views. |
+| `CountedItem` | Generic name/count structure. |
+| `PSetSummary` | Property set summary with parameter names. |
+| `ComparisonOperator` | Operator enum for query filters. |
+| `FilterCriterion` | Atomic filter expression in a query tree. |
+| `ComplexQuery` | Recursive AND/OR/NOT query contract. |
+| `SharedValue` | Shared-or-mixed marker for inspected values. |
+| `SelectionAnalysis` | Common attributes/psets across selected GUIDs. |
+
 ## 🧪 Tests
 The test suite is centered on the public package contract: real IDS parsing, IFC discovery, query execution, and manifest application. It intentionally avoids relying on fake IDS facets or private helper behavior.
 

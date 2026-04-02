@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 authors = [
-    { name = "Gernot Luidolt", email = "gernot.luidolt@swietelsky.at" }
+    { name = "Gernot Luidolt", email = "gernot@luido.lt" }
 ]
 requires-python = ">=3.11"
 dependencies = [

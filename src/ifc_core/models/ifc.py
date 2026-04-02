@@ -5,25 +5,33 @@ from .ids import IdsRequirement, ConcreteRequirement
 
 
 class ModelMetadata(BaseModel):
+    """Metadata extracted from the IFC file header and project context."""
+
     schema_version: str
     author: str
     timestamp: str
 
 
 class ModificationResult(BaseModel):
+    """Result of applying a write operation to one IFC element."""
+
     success: bool
     msg: str
     express_id: Optional[int] = None
 
 
 class MappingState(str, Enum):
-    UNMAPPED = "UNMAPPED"         # Element fails applicability or lacks properties
-    INCOMPLETE = "INCOMPLETE"     # Required parameters exist, but missing values
-    INVALID = "INVALID"           # Required parameters exist, but violate constraints
-    COMPLIANT = "COMPLIANT"       # All IDS requirements met
+    """Mapping states returned by IDS validation endpoints."""
+
+    UNMAPPED = "UNMAPPED"  # Element fails applicability or lacks properties
+    INCOMPLETE = "INCOMPLETE"  # Required parameters exist, but missing values
+    INVALID = "INVALID"  # Required parameters exist, but violate constraints
+    COMPLIANT = "COMPLIANT"  # All IDS requirements met
 
 
 class MappingStatus(BaseModel):
+    """Validation outcome for one element against one specification."""
+
     element_guid: str
     spec_name: str
     state: MappingState
@@ -32,6 +40,8 @@ class MappingStatus(BaseModel):
 
 
 class ModelMappingSummary(BaseModel):
+    """Aggregate mapping counts for one specification."""
+
     spec_name: str
     total_applicable: int
     compliant_count: int
@@ -41,13 +51,16 @@ class ModelMappingSummary(BaseModel):
 
 
 class BulkSpecificationManifest(BaseModel):
+    """Resolved write contract for applying one requirement set to many elements."""
+
     element_guids: List[str]
     specification_name: str
     requirements: List[ConcreteRequirement]
 
 
 class SpatialNode(BaseModel):
-    """Recursive node for spatial hierarchy. children=None indicates lazy-loading required."""
+    """Recursive spatial tree node used by discovery endpoints."""
+
     guid: str
     name: str
     type: str  # IfcSite, IfcBuilding, IfcBuildingStorey
@@ -57,16 +70,21 @@ class SpatialNode(BaseModel):
 
 
 class CountedItem(BaseModel):
+    """Name/count pair used by discovery endpoints."""
+
     name: str
     element_count: int
 
 
 class PSetSummary(CountedItem):
-    """A map of what PSets exist and which parameters they contain."""
+    """Property set summary including the parameter names it exposes."""
+
     parameters: List[str]
 
 
 class ComparisonOperator(str, Enum):
+    """Comparison operators supported by query filters."""
+
     EQUALS = "=="
     NOT_EQUALS = "!="
     GREATER_THAN = ">"
@@ -75,29 +93,35 @@ class ComparisonOperator(str, Enum):
 
 
 class FilterCriterion(BaseModel):
-    category: str # "Attribute", "PSet", "Material", "Story", "MappingStatus"
-    name: Optional[str] = None # e.g., "LoadBearing". None if checking just Pset/Material existence
+    """Atomic predicate used in a ComplexQuery expression tree."""
+
+    category: str  # "Attribute", "PSet", "Material", "Story", "MappingStatus"
+    name: Optional[str] = (
+        None  # e.g., "LoadBearing". None if checking just Pset/Material existence
+    )
     operator: ComparisonOperator
     value: Any
-    property_set: Optional[str] = None # Required if category == "PSet"
+    property_set: Optional[str] = None  # Required if category == "PSet"
 
 
 class ComplexQuery(BaseModel):
-    """The recursive contract for cascading AND/OR/NOT logic."""
-    logical_op: str = "AND" # "AND", "OR", "NOT"
+    """Recursive boolean query contract supporting AND, OR, and NOT."""
+
+    logical_op: str = "AND"  # "AND", "OR", "NOT"
     criteria: List[Union[FilterCriterion, "ComplexQuery"]]
 
 
 class SharedValue(BaseModel):
+    """Value container that marks whether an inspected field is mixed."""
+
     value: Any
-    is_mixed: bool = False # True if the selected GUIDs have different values for this key
+    is_mixed: bool = (
+        False  # True if the selected GUIDs have different values for this key
+    )
 
 
 class SelectionAnalysis(BaseModel):
-    """
-    Requirements for Implementation:
-    1. Only return Psets/Attributes present in EVERY provided GUID.
-    2. If values differ across GUIDs, mark is_mixed=True.
-    """
+    """Shared values returned when inspecting multiple element GUIDs."""
+
     common_attributes: Dict[str, SharedValue]
     common_psets: Dict[str, Dict[str, SharedValue]]

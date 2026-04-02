@@ -7,14 +7,12 @@ from ifc_core import IfcStore, IdsStore
 
 @pytest.fixture(scope="session")
 def real_ids_path():
-    return Path(
-        "tests/data/AT_3-1_Informationsanforderungskatalog für Hochbauprojekte_edited.ids"
-    )
+    return Path("tests/data/SAMPLE.ids")
 
 
 @pytest.fixture(scope="session")
 def real_ifc_path():
-    return Path("tests/data/HG_TWPL_TW_033.ifc")
+    return Path("tests/data/SAMPLE.ifc")
 
 
 @pytest.fixture(scope="session")
