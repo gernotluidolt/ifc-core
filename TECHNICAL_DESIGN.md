@@ -79,8 +79,8 @@ class SelectionAnalysis(BaseModel):
 
 ---
 
-## 4. Core Package Requirements (Methods)
-The `IfcStore` class must implement the following "Engine" methods:
+## 4. Core Package Requirements (Engine)
+The `IfcStore` class manages the following "Engine" methods:
 
 | **Method**             | **Input**      | **Returns**         | **Implementation Detail**                         |
 | ---------------------- | -------------- | ------------------- | ------------------------------------------------- |
@@ -140,7 +140,7 @@ class BulkSpecificationManifest(BaseModel):
 
 ## 7. The "Enrichment" Workflow Methods
 
-The `IfcStore` must implement these "Alignment" methods:
+The `IfcStore` exposes these API alignment integrations natively:
 
 | **Method**                     | **Input**                   | **Returns**                    | **Implementation Detail**                                                 |
 | ------------------------------ | --------------------------- | ------------------------------ | ------------------------------------------------------------------------- |
@@ -169,7 +169,7 @@ The **Query Engine** (`ComplexQuery`) must now support a new category: `MappingS
 
 1. **On-the-Fly Analysis:** Mapping status should be calculated dynamically by comparing the IFC model to the IDS store. Do not rely on hardcoded "Status" properties in the IFC file, as they can become out of sync. All requests must be executed directly against the model with no caching mechanisms, to ensure strict real-time accuracy.
 
-2. **Entity Type Modification (UNMAPPED):** Be prepared that an element may start as generic (e.g. `IfcBuildingElementProxy`) and require its IfcEntity type changed to match applicability before addressing granular properties.
+2. **Entity Type Modification (UNMAPPED):** Handled transparently by the `ManifestWriter` when `type == "Entity"` permitting direct mutations (via `root.reassign_class`) mapping elements like `IfcBuildingElementProxy` automatically mid-manifest.
 
 3. **Material Linking:** Both creating new materials and linking them should be supported. Assume the model does not have the right material yet; proactively append it to the document's global `IfcMaterial` library during assignment.
 

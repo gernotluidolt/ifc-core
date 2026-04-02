@@ -19,8 +19,8 @@ src/ifc_core/
 │   └── ids.py         # IdsSpecification, SpecificationManifest, ConcreteRequirement
 └── services/
     ├── ids_reader.py  # IDS 1.0 parser (extracts enumerations/options/ranges)
-    ├── writer.py      # ifcopenshell.api wrapper for PSets/Attributes
-    ├── aligner.py     # Logic to apply Manifests to elements
+    ├── writer.py      # ifcopenshell.api wrapper for PSets/Attributes/Materials
+    ├── validator.py   # Independent engine for Mapping Status lifecycle
     └── metadata.py    # IFC Header/Schema extraction
 ```
 
@@ -36,7 +36,7 @@ We have established a strict boundary to prevent "guesswork" in the package:
 - **Path Handling:** Uses `pathlib` and handles Windows raw strings `r"C:\..."`.
 - **Boilerplate:** All core classes, services, and models are initialized and wired through `__init__.py`.
 
-## 🚀 Next Steps for the Agent
-1. **Validation Logic:** Build a service to check if an element already matches a `Specification` (Gap Analysis).
-2. **Classification/Material Support:** Expand `writer.py` and `aligner.py` to handle IFC Classifications and Materials.
-3. **Unit Testing:** Add `pytest` for the `ids_reader` to ensure XML restrictions are correctly mapped to Pydantic options.
+## 🚀 Current Implementation Scope
+1. **Validation Logic (`validator.py`):** Calculates structural alignments mapping element geometries directly against `Specification` schemas yielding `MappingState`.
+2. **Advanced Writers (`writer.py`):** Includes `ManifestWriter` with scoped material-caching resolving complex classifications cleanly in bulk.
+3. **Query Optimizations:** Features transient context caching within `IfcStore` during complex API requests that systematically invalidates to preserve the system's stateless definition.

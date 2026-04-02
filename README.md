@@ -87,10 +87,12 @@ src/ifc_core/
     ├── metadata.py    # IFC Header Parsing
     ├── writer.py      # IFC Model Modification (API based)
     ├── ids_reader.py  # IDS XML & Restriction Parsing
-    └── aligner.py     # Logic for applying Manifests
+    └── validator.py   # Gap analysis and mapping validation
 ```
 
 ## 🏗️ Key Capabilities
+- **State Engine:** Automatically evaluates the `MappingState` (`COMPLIANT`, `UNMAPPED`, `INCOMPLETE`, `INVALID`) across elements natively leveraging scoped query caching.
+- **Bulk Operations Optimizations:** The internal `ManifestWriter` handles high-frequency assignments resolving complex schemas across thousands of geometries quickly using material memory pooling.
 - **Ambiguity Management:** Extracts `xs:enumeration` and range restrictions from IDS for UI generation.
 - **Contract-Based Writing:** Uses `SpecificationManifest` to ensure the App resolves all choices before the package touches the IFC.
 - **Full IDS 1.0 Support:** Handles Properties, Attributes, Materials, and Classifications.
