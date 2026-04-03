@@ -1,7 +1,6 @@
 import ifcopenshell
 import ifcopenshell.api
-import ifcopenshell.util.element
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional, Callable
 
 from ..models.ids import SpecificationManifest, ConcreteRequirement
 from ..models.ifc import ModificationResult, BulkSpecificationManifest
@@ -9,102 +8,163 @@ from ..models.ifc import ModificationResult, BulkSpecificationManifest
 
 class ManifestWriter:
     """
-    Service Layer class to handle applying requirements to elements.
-    Maintains a temporary lookup of materials created during the session
-    to prevent duplication during bulk operations.
+    Service Layer to apply requirements to IFC elements.
+    Includes caching for shared resources like materials and classifications.
+
+    Pro-tip: For large-scale operations, consider using this class as a context manager or explicitly compacting the model after bulk writes to avoid orphaned entities (see IfcOpenShell docs).
     """
 
     def __init__(self, model: ifcopenshell.file):
         self.model = model
-        self._materials_cache: Dict[str, Any] = {}
+        # Pre-cache existing materials and classifications for performance
+        self._materials_cache: Dict[str, Any] = {
+            m.Name: m for m in model.by_type("IfcMaterial") if getattr(m, "Name", None)
+        }
+        self._classifications_cache: Dict[str, Any] = {
+            getattr(c, "Name", ""): c for c in model.by_type("IfcClassification")
+        }
 
-    def _get_or_create_material(self, name: str):
-        if name in self._materials_cache:
-            return self._materials_cache[name]
+        # Dispatch table for requirement types
+        self._handlers: Dict[
+            str, Callable[[Any, ConcreteRequirement], ModificationResult]
+        ] = {
+            "property": self._handle_property,
+            "attribute": self._handle_attribute,
+            "entity": self._handle_entity,
+            "material": self._handle_material,
+            "classification": self._handle_classification,
+        }
 
-        # Check existing in model
-        for mat in self.model.by_type("IfcMaterial"):
-            if mat.Name == name:
-                self._materials_cache[name] = mat
-                return mat
+    # --- Internal Helpers ---
 
-        # Create new
-        mat = ifcopenshell.api.run("material.add_material", self.model, name=name)
-        self._materials_cache[name] = mat
-        return mat
+    def _get_existing_pset_entity(self, element: Any, pset_name: str) -> Optional[Any]:
+        for rel in getattr(element, "IsDefinedBy", []) or []:
+            if rel.is_a("IfcRelDefinesByProperties"):
+                pset = rel.RelatingPropertyDefinition
+                if pset.is_a("IfcPropertySet") and pset.Name == pset_name:
+                    return pset
+        return None
 
-    def apply_requirement(
-        self, element, req: ConcreteRequirement
-    ) -> ModificationResult:
-        try:
-            req_type = req.type.lower() if req.type else ""
-            if req_type == "property":
-                pset = ifcopenshell.util.element.get_pset(element, req.property_set)
-                if not pset:
-                    pset = ifcopenshell.api.run(
-                        "pset.add_pset",
-                        self.model,
-                        product=element,
-                        name=req.property_set,
-                    )
+    def _normalize_ifc_class(self, raw: Any) -> Optional[str]:
+        text = str(raw or "").strip()
+        if not text:
+            return None
+        # Only allow valid IFC entity names (simple heuristic)
+        if text.lower().startswith("ifc"):
+            base = "Ifc" + text[3:].capitalize()
+        else:
+            base = "Ifc" + text.capitalize()
+        # Optionally, check against a known set of IFC classes here
+        return base
 
-                ifcopenshell.api.run(
-                    "pset.edit_pset",
-                    self.model,
-                    pset=pset,
-                    properties={req.name: req.value},
-                )
-                return ModificationResult(success=True, msg=f"Set Property {req.name}")
+    # --- Requirement Handlers ---
 
-            elif req_type == "attribute":
-                ifcopenshell.api.run(
-                    "attribute.edit_attributes",
-                    self.model,
-                    product=element,
-                    attributes={req.name: req.value},
-                )
-                return ModificationResult(success=True, msg=f"Set Attribute {req.name}")
-
-            elif req_type == "entity":
-                ifcopenshell.api.run(
-                    "root.reassign_class",
-                    self.model,
-                    product=element,
-                    ifc_class=req.value,
-                )
-                return ModificationResult(
-                    success=True, msg=f"Reassigned class to {req.value}"
-                )
-
-            elif req_type == "material":
-                mat = self._get_or_create_material(req.value)
-                ifcopenshell.api.run(
-                    "material.assign_material",
-                    self.model,
-                    product=element,
-                    type="IfcMaterial",
-                    material=mat,
-                )
-                return ModificationResult(
-                    success=True, msg=f"Assigned Material {req.value}"
-                )
-
-            elif req_type == "classification":
-                ifcopenshell.api.run(
-                    "classification.add_reference",
-                    self.model,
-                    product=element,
-                    identification=req.value,
-                    name=req.name or req.value,
-                )
-                return ModificationResult(
-                    success=True, msg=f"Assigned Classification {req.value}"
-                )
-
+    def _handle_property(self, element, req) -> ModificationResult:
+        pset_name = (req.property_set or "").strip()
+        if not pset_name:
             return ModificationResult(
-                success=False, msg=f"Unsupported req type: {req.type}"
+                success=False, msg=f"Missing property_set for {req.name}"
             )
 
+        pset = self._get_existing_pset_entity(
+            element, pset_name
+        ) or ifcopenshell.api.run(
+            "pset.add_pset", self.model, product=element, name=pset_name
+        )
+
+        ifcopenshell.api.run(
+            "pset.edit_pset", self.model, pset=pset, properties={req.name: req.value}
+        )
+        return ModificationResult(success=True, msg=f"Set Property {req.name}")
+
+    def _handle_attribute(self, element, req) -> ModificationResult:
+        ifcopenshell.api.run(
+            "attribute.edit_attributes",
+            self.model,
+            product=element,
+            attributes={req.name: req.value},
+        )
+        return ModificationResult(success=True, msg=f"Set Attribute {req.name}")
+
+    def _handle_entity(self, element, req) -> ModificationResult:
+        target_class = self._normalize_ifc_class(req.value)
+        if not target_class:
+            return ModificationResult(success=False, msg="Invalid target IFC class")
+
+        if element.is_a(target_class):
+            return ModificationResult(success=True, msg=f"Class already {target_class}")
+
+        # Clean up types before reassignment
+        for rel in list(getattr(element, "IsTypedBy", []) or []):
+            ifcopenshell.api.run("root.remove_product", self.model, product=rel)
+
+        ifcopenshell.api.run(
+            "root.reassign_class", self.model, product=element, ifc_class=target_class
+        )
+        return ModificationResult(success=True, msg=f"Reassigned to {target_class}")
+
+    def _handle_material(self, element, req) -> ModificationResult:
+        name = req.value
+        # Only use the pre-cached materials for performance
+        mat = self._materials_cache.get(name)
+        if not mat:
+            mat = ifcopenshell.api.run("material.add_material", self.model, name=name)
+            self._materials_cache[name] = mat
+        ifcopenshell.api.run(
+            "material.assign_material", self.model, product=element, material=mat
+        )
+        return ModificationResult(success=True, msg=f"Assigned Material {name}")
+
+    def _handle_classification(self, element, req) -> ModificationResult:
+        # req.name is expected to be the classification system name (e.g., "Uniclass 2015").
+        # If your workflow distinguishes system vs. item, adapt here.
+        system_name = (req.name or "").strip()
+        if not system_name:
+            return ModificationResult(
+                success=False, msg="Missing classification system name"
+            )
+
+        cls_obj = self._classifications_cache.get(system_name) or next(
+            (
+                c
+                for c in self.model.by_type("IfcClassification")
+                if getattr(c, "Name", "") == system_name
+            ),
+            None,
+        )
+
+        if not cls_obj:
+            cls_obj = ifcopenshell.api.run(
+                "classification.add_classification",
+                self.model,
+                classification=system_name,
+            )
+
+        self._classifications_cache[system_name] = cls_obj
+        ifcopenshell.api.run(
+            "classification.add_reference",
+            self.model,
+            product=element,
+            classification=cls_obj,
+            identification=req.value,
+            name=req.name or req.value,
+        )
+        return ModificationResult(
+            success=True, msg=f"Assigned Classification {req.value}"
+        )
+
+    # --- Public API ---
+
+    def apply_requirement(
+        self, element: Any, req: ConcreteRequirement
+    ) -> ModificationResult:
+        try:
+            handler = self._handlers.get((req.type or "").lower())
+            if not handler:
+                return ModificationResult(
+                    success=False, msg=f"Unsupported req type: {req.type}"
+                )
+            return handler(element, req)
         except Exception as e:
             return ModificationResult(
                 success=False, msg=f"Error in {req.name}: {str(e)}"
@@ -113,36 +173,84 @@ class ManifestWriter:
     def apply_manifest(
         self, manifest: SpecificationManifest
     ) -> List[ModificationResult]:
-        results = []
         element = self.model.by_guid(manifest.element_guid)
         if not element:
-            return [ModificationResult(success=False, msg="Element GUID not found")]
+            return [
+                ModificationResult(
+                    success=False, msg=f"GUID {manifest.element_guid} not found"
+                )
+            ]
 
+        results = []
+        # Handle entity/class change first if present
+        entity_req = next(
+            (r for r in manifest.requirements if (r.type or "").lower() == "entity"),
+            None,
+        )
+        if entity_req:
+            results.append(self.apply_requirement(element, entity_req))
+            # Re-fetch element after class change
+            element = self.model.by_guid(manifest.element_guid)
+            if not element:
+                results.append(
+                    ModificationResult(
+                        success=False,
+                        msg="Element missing after class change (possible model inconsistency)",
+                    )
+                )
+                return results
+
+        # Now handle all other requirements except entity
         for req in manifest.requirements:
+            if (req.type or "").lower() == "entity":
+                continue
             results.append(self.apply_requirement(element, req))
-
         return results
 
     def apply_bulk_manifest(
         self, manifest: BulkSpecificationManifest
     ) -> List[ModificationResult]:
-        all_results = []
+        results = []
         for guid in manifest.element_guids:
             element = self.model.by_guid(guid)
             if not element:
-                all_results.append(
+                results.append(
                     ModificationResult(success=False, msg=f"Element {guid} not found")
                 )
                 continue
 
-            for req in manifest.requirements:
-                all_results.append(self.apply_requirement(element, req))
+            # 1. Handle Entity change first
+            entity_req = next(
+                (
+                    r
+                    for r in manifest.requirements
+                    if (r.type or "").lower() == "entity"
+                ),
+                None,
+            )
+            if entity_req:
+                res = self.apply_requirement(element, entity_req)
+                results.append(res)
+                if res.success:
+                    element = self.model.by_guid(guid)  # Re-fetch
+                    if not element:
+                        results.append(
+                            ModificationResult(
+                                success=False,
+                                msg=f"Element {guid} missing after class change (possible model inconsistency)",
+                            )
+                        )
+                        continue
 
-        return all_results
+            # 2. Handle others
+            for req in manifest.requirements:
+                if (req.type or "").lower() == "entity":
+                    continue
+                results.append(self.apply_requirement(element, req))
+        return results
 
 
 def apply_manifest_to_element(
     model: ifcopenshell.file, manifest: SpecificationManifest
 ) -> List[ModificationResult]:
-    writer = ManifestWriter(model)
-    return writer.apply_manifest(manifest)
+    return ManifestWriter(model).apply_manifest(manifest)
