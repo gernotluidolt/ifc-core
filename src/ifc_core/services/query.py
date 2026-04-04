@@ -72,10 +72,32 @@ class QueryEngine:
             if material:
                 if material.is_a("IfcMaterialLayerSetUsage"):
                     mset = getattr(material, "ForLayerSet", None)
-                    if mset: 
+                    if mset:
                         val = getattr(mset, "MaterialSetName", None)
                 if not val:
                     val = getattr(material, "Name", None)
+
+        elif category == "classification":
+            # Scan classification associations
+            for rel in getattr(element, "HasAssociations", []):
+                if rel.is_a("IfcRelAssociatesClassification"):
+                    ref = getattr(rel, "RelatingClassification", None)
+                    if not ref:
+                        continue
+
+                    # We compare against the Classification Reference Name
+                    # or the System Name if specified in property_set
+                    val = getattr(ref, "Name", None)
+                    system = getattr(ref, "ReferencedSource", None)
+                    system_name = getattr(system, "Name", None) if system else None
+
+                    # If property_set is used, it acts as a 'System' filter
+                    if criterion.property_set and system_name != criterion.property_set:
+                        continue
+
+                    if self._compare(val, criterion.value, criterion.operator):
+                        return True
+            return False
 
         return self._compare(val, criterion.value, criterion.operator)
 

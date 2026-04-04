@@ -32,6 +32,7 @@ from .services.discovery import (
 from .services.inspector import analyze_guids
 from .services.query import QueryEngine
 from .ids_store import IdsStore
+from .services.groups.base import AbstractGroupRepository
 
 
 class IfcStore:
@@ -51,6 +52,11 @@ class IfcStore:
             raise FileNotFoundError(f"No IFC file at {path}")
         self._model = ifcopenshell.open(str(self.path))
         self._mapping_cache: Dict[str, MappingStatus] = {}
+        self.groups: Optional[AbstractGroupRepository] = None
+
+    def bind_groups(self, repo: AbstractGroupRepository):
+        """Inject a grouping storage backend into the store."""
+        self.groups = repo
 
     def _clear_cache(self):
         """Invalidates the lazy cache when the model is modified."""
