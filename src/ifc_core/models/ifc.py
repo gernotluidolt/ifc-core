@@ -82,6 +82,36 @@ class PSetSummary(CountedItem):
     parameters: List[str]
 
 
+class ClassificationNode(BaseModel):
+    """Tree node used for classification discovery responses."""
+
+    id: str
+    type: str  # system, reference, element
+    name: str
+    count: Optional[int] = None
+    children: List["ClassificationNode"] = []
+
+
+class ClassificationTree(BaseModel):
+    """Classification discovery response payload."""
+
+    tree: List[ClassificationNode]
+    total_elements: int
+
+
+class LayeredMaterialItem(CountedItem):
+    """Layered material summary with layer count metadata."""
+
+    layer_count: int
+
+
+class LayeredMaterialsSummary(BaseModel):
+    """Layered material discovery response payload."""
+
+    materials: List[LayeredMaterialItem]
+    total_elements: int
+
+
 class ComparisonOperator(str, Enum):
     """Comparison operators supported by query filters."""
 

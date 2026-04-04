@@ -14,12 +14,21 @@ from .models.ifc import (
     SpatialNode,
     CountedItem,
     PSetSummary,
+    ClassificationTree,
+    LayeredMaterialsSummary,
     SelectionAnalysis,
     ComplexQuery,
 )
 from .services.metadata import get_model_info
 from .services.validator import check_mapping_status as validate_mapping_status
-from .services.discovery import get_spatial_tree, get_psets, get_materials
+from .services.discovery import (
+    get_spatial_tree,
+    get_psets,
+    get_materials,
+    get_entity_counts,
+    get_classification_tree,
+    get_layered_materials,
+)
 from .services.inspector import analyze_guids
 from .services.query import QueryEngine
 from .ids_store import IdsStore
@@ -99,6 +108,30 @@ class IfcStore:
             Materials discovered in the model, with element counts.
         """
         return get_materials(self._model)
+
+    def get_entity_counts(self) -> List[CountedItem]:
+        """List IfcProduct entity types with occurrence counts.
+
+        Returns:
+            Entity name/count pairs.
+        """
+        return get_entity_counts(self._model)
+
+    def get_classification_tree(self) -> ClassificationTree:
+        """Return full model classification tree including unclassified bucket.
+
+        Returns:
+            Classification tree DTO.
+        """
+        return get_classification_tree(self._model)
+
+    def get_layered_materials(self) -> LayeredMaterialsSummary:
+        """Return layered material aggregates.
+
+        Returns:
+            Layered materials summary DTO.
+        """
+        return get_layered_materials(self._model)
 
     # -------------------------------------------------------------------------
     # QUERY & INSPECTION ENGINE
