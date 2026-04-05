@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 import ifcopenshell
 
 from ifc_core.models.ids import SpecificationManifest
@@ -38,19 +38,27 @@ from .services.groups.base import AbstractGroupRepository
 class IfcStore:
     """Primary public endpoint for IFC read, query, analysis, and write workflows."""
 
-    def __init__(self, path: Path):
-        """Load an IFC file and initialize store-local caches.
+    def __init__(self, path: Optional[Path] = None, model: Any = None):
+        """Initialize store from an IFC file path or an existing in-memory model.
 
         Args:
-            path: Path to an existing .ifc file.
+            path: Path to an existing .ifc file. Required if model is None.
+            model: An optional existing ifcopenshell model instance.
 
         Raises:
-            FileNotFoundError: If the IFC file does not exist.
+            ValueError: If neither path nor model is provided.
+            FileNotFoundError: If path is provided but does not exist.
         """
-        self.path = Path(path)
-        if not self.path.exists():
-            raise FileNotFoundError(f"No IFC file at {path}")
-        self._model = ifcopenshell.open(str(self.path))
+        if model is not None:
+            self._model = model
+            self.path = Path(path) if path else None
+        elif path:
+            self.path = Path(path)
+            if not self.path.exists():
+                raise FileNotFoundError(f"No IFC file at {path}")
+            self._model = ifcopenshell.open(str(self.path))
+        else:
+            raise ValueError("Either 'path' or 'model' must be provided to IfcStore")
         self._mapping_cache: Dict[str, MappingStatus] = {}
         self.groups: Optional[AbstractGroupRepository] = None
 
@@ -79,8 +87,13 @@ class IfcStore:
 
         Returns:
             None.
+
+        Raises:
+            ValueError: If neither target_path nor self.path is available.
         """
         save_to = target_path or self.path
+        if save_to is None:
+            raise ValueError("No path available to save the IFC model.")
         self._model.write(str(save_to))
         self._clear_cache()
 
