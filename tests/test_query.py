@@ -1,7 +1,11 @@
 import ifcopenshell.api
 
-from ifc_core.models.ifc import ComplexQuery, FilterCriterion, ComparisonOperator
-from ifc_core.models.ifc import MappingState
+from ifc_core.models.ifc import (
+    ComparisonOperator,
+    ComplexQuery,
+    FilterCriterion,
+    MappingState,
+)
 
 
 def test_query_pset_existence(real_ifc_store):

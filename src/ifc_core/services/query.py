@@ -1,7 +1,10 @@
+from typing import Any
+
 import ifcopenshell
 import ifcopenshell.util.element
-from typing import List, Union, Any
-from ..models.ifc import ComplexQuery, FilterCriterion, ComparisonOperator
+
+from ..models.ifc import ComparisonOperator, ComplexQuery, FilterCriterion
+
 
 class QueryEngine:
     def __init__(self, model: ifcopenshell.file):
@@ -17,56 +20,64 @@ class QueryEngine:
     def _evaluate_criterion(self, element, criterion: FilterCriterion) -> bool:
         category = criterion.category.lower()
         val = None
-        
+
         if category == "attribute":
             info = element.get_info()
             if criterion.name in info:
                 val = info[criterion.name]
-                
+
         elif category == "pset":
             psets = ifcopenshell.util.element.get_psets(element)
-            
+
             # If name is omitted, short circuit to true if container matched
             if not criterion.name:
                 if criterion.property_set in psets:
                     return True
                 return False
-                
-            if criterion.property_set in psets and criterion.name in psets[criterion.property_set]:
+
+            if (
+                criterion.property_set in psets
+                and criterion.name in psets[criterion.property_set]
+            ):
                 val = psets[criterion.property_set][criterion.name]
-                
+
         elif category == "story":
             # For 'Story', find spatial container
             for rel in getattr(element, "ContainedInStructure", []):
                 val = getattr(rel.RelatingStructure, "Name", None)
-                if val: 
+                if val:
                     break
 
         elif category == "mappingstatus" and self._ifc_store and self.ids_store:
             # Reusing the existing mapping logic directly
-            # We use check_mapping_status logic internally 
+            # We use check_mapping_status logic internally
             guid = getattr(element, "GlobalId", None)
-            spec_name = criterion.property_set # Expecting property_set to hold the spec name
-            
+            spec_name = (
+                criterion.property_set
+            )  # Expecting property_set to hold the spec name
+
             if guid:
                 for spec in self.ids_store.specifications:
-                    if spec_name and spec.name != spec_name: 
+                    if spec_name and spec.name != spec_name:
                         continue
                     cache_key = f"{guid}_{spec.name}"
-                    
+
                     status = None
                     if cache_key in self._ifc_store._mapping_cache:
                         status = self._ifc_store._mapping_cache[cache_key]
                     else:
-                        from ..services.validator import check_mapping_status as validate_mapping_status
+                        from ..services.validator import (
+                            check_mapping_status as validate_mapping_status,
+                        )
+
                         status = validate_mapping_status(element, spec)
                         self._ifc_store._mapping_cache[cache_key] = status
-                    
+
                     # check actual mapping state
                     if status and status.state.value == criterion.value:
                         return True
             return False
-            
+
         elif category == "material":
             material = ifcopenshell.util.element.get_material(element)
             if material:
@@ -102,19 +113,19 @@ class QueryEngine:
         return self._compare(val, criterion.value, criterion.operator)
 
     def _compare(self, actual: Any, target: Any, op: ComparisonOperator) -> bool:
-        if actual is None: 
+        if actual is None:
             return False
-        
+
         val_str = str(actual)
         target_str = str(target)
-        
+
         if op == ComparisonOperator.EQUALS:
             return val_str == target_str
         elif op == ComparisonOperator.NOT_EQUALS:
             return val_str != target_str
         elif op == ComparisonOperator.CONTAINS:
             return target_str in val_str
-            
+
         try:
             actual_f = float(actual)
             target_f = float(target)
@@ -124,16 +135,18 @@ class QueryEngine:
                 return actual_f < target_f
         except ValueError:
             pass
-            
+
         return False
 
-    def _evaluate_node(self, element, query: Union[ComplexQuery, FilterCriterion]) -> bool:
+    def _evaluate_node(
+        self, element, query: ComplexQuery | FilterCriterion
+    ) -> bool:
         if isinstance(query, FilterCriterion):
             return self._evaluate_criterion(element, query)
-            
+
         if not query.criteria:
             return True
-            
+
         op = query.logical_op.upper()
         if op == "AND":
             return all(self._evaluate_node(element, c) for c in query.criteria)
@@ -141,15 +154,15 @@ class QueryEngine:
             return any(self._evaluate_node(element, c) for c in query.criteria)
         elif op == "NOT":
             return not any(self._evaluate_node(element, c) for c in query.criteria)
-            
+
         return False
 
-    def execute(self, query: ComplexQuery) -> List[str]:
+    def execute(self, query: ComplexQuery) -> list[str]:
         elements = self.model.by_type("IfcProduct")
         matched = []
         for el in elements:
             if self._evaluate_node(el, query):
                 guid = getattr(el, "GlobalId", None)
-                if guid: 
+                if guid:
                     matched.append(guid)
         return matched

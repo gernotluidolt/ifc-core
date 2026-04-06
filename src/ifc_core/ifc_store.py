@@ -1,44 +1,46 @@
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
+
 import ifcopenshell
 
 from ifc_core.models.ids import SpecificationManifest
-from ifc_core.services.writer import apply_manifest_to_element, ManifestWriter
+from ifc_core.services.writer import ManifestWriter, apply_manifest_to_element
+
+from .ids_store import IdsStore
 from .models.ifc import (
-    ModelMetadata,
-    ModificationResult,
+    BulkSpecificationManifest,
+    ClassificationTree,
+    ComplexQuery,
+    CountedItem,
+    LayeredMaterialsSummary,
+    MappingState,
     MappingStatus,
     ModelMappingSummary,
-    BulkSpecificationManifest,
-    MappingState,
-    SpatialNode,
-    CountedItem,
+    ModelMetadata,
+    ModificationResult,
     PSetSummary,
-    ClassificationTree,
-    LayeredMaterialsSummary,
     SelectionAnalysis,
-    ComplexQuery,
+    SpatialNode,
 )
-from .services.metadata import get_model_info
-from .services.validator import check_mapping_status as validate_mapping_status
 from .services.discovery import (
-    get_spatial_tree,
-    get_psets,
-    get_materials,
-    get_entity_counts,
     get_classification_tree,
+    get_entity_counts,
     get_layered_materials,
+    get_materials,
+    get_psets,
+    get_spatial_tree,
 )
-from .services.inspector import analyze_guids
-from .services.query import QueryEngine
-from .ids_store import IdsStore
 from .services.groups.base import AbstractGroupRepository
+from .services.inspector import analyze_guids
+from .services.metadata import get_model_info
+from .services.query import QueryEngine
+from .services.validator import check_mapping_status as validate_mapping_status
 
 
 class IfcStore:
     """Primary public endpoint for IFC read, query, analysis, and write workflows."""
 
-    def __init__(self, path: Optional[Path] = None, model: Any = None):
+    def __init__(self, path: Path | None = None, model: Any = None):
         """Initialize store from an IFC file path or an existing in-memory model.
 
         Args:
@@ -59,8 +61,8 @@ class IfcStore:
             self._model = ifcopenshell.open(str(self.path))
         else:
             raise ValueError("Either 'path' or 'model' must be provided to IfcStore")
-        self._mapping_cache: Dict[str, MappingStatus] = {}
-        self.groups: Optional[AbstractGroupRepository] = None
+        self._mapping_cache: dict[str, MappingStatus] = {}
+        self.groups: AbstractGroupRepository | None = None
 
     def bind_groups(self, repo: AbstractGroupRepository):
         """Inject a grouping storage backend into the store."""
@@ -79,7 +81,7 @@ class IfcStore:
         """
         return get_model_info(self._model)
 
-    def save(self, target_path: Optional[Path] = None):
+    def save(self, target_path: Path | None = None):
         """Persist model changes and clear mapping caches.
 
         Args:
@@ -101,7 +103,7 @@ class IfcStore:
     # DISCOVERY API
     # -------------------------------------------------------------------------
 
-    def get_spatial_tree(self, parent_guid: Optional[str] = None) -> List[SpatialNode]:
+    def get_spatial_tree(self, parent_guid: str | None = None) -> list[SpatialNode]:
         """Return spatial hierarchy nodes for UI tree views.
 
         Args:
@@ -112,7 +114,7 @@ class IfcStore:
         """
         return get_spatial_tree(self._model, parent_guid)
 
-    def get_psets(self) -> List[PSetSummary]:
+    def get_psets(self) -> list[PSetSummary]:
         """List unique property sets with occurrence counts and parameter names.
 
         Returns:
@@ -120,7 +122,7 @@ class IfcStore:
         """
         return get_psets(self._model)
 
-    def get_materials(self) -> List[CountedItem]:
+    def get_materials(self) -> list[CountedItem]:
         """List known materials with usage counts across elements.
 
         Returns:
@@ -128,7 +130,7 @@ class IfcStore:
         """
         return get_materials(self._model)
 
-    def get_entity_counts(self) -> List[CountedItem]:
+    def get_entity_counts(self) -> list[CountedItem]:
         """List IfcProduct entity types with occurrence counts.
 
         Returns:
@@ -156,7 +158,7 @@ class IfcStore:
     # QUERY & INSPECTION ENGINE
     # -------------------------------------------------------------------------
 
-    def analyze_guids(self, guids: List[str]) -> SelectionAnalysis:
+    def analyze_guids(self, guids: list[str]) -> SelectionAnalysis:
         """Compute shared attributes and PSets for the given element GUIDs.
 
         Mixed values are represented through SharedValue.is_mixed.
@@ -170,8 +172,8 @@ class IfcStore:
         return analyze_guids(self._model, guids)
 
     def execute_query(
-        self, query: ComplexQuery, ids_store: Optional[IdsStore] = None
-    ) -> List[str]:
+        self, query: ComplexQuery, ids_store: IdsStore | None = None
+    ) -> list[str]:
         """
         Execute a recursive query tree and return matching element GUIDs.
 
@@ -193,7 +195,7 @@ class IfcStore:
 
     def apply_specification(
         self, manifest: SpecificationManifest
-    ) -> List[ModificationResult]:
+    ) -> list[ModificationResult]:
         """
         Apply one resolved specification manifest to one IFC element.
 
@@ -208,7 +210,7 @@ class IfcStore:
 
     def apply_bulk_manifest(
         self, manifest: BulkSpecificationManifest
-    ) -> List[ModificationResult]:
+    ) -> list[ModificationResult]:
         """
         Apply one resolved requirement set to many elements.
 
@@ -222,7 +224,7 @@ class IfcStore:
         writer = ManifestWriter(self._model)
         return writer.apply_bulk_manifest(manifest)
 
-    def check_mapping_status(self, ids_store: IdsStore) -> List[MappingStatus]:
+    def check_mapping_status(self, ids_store: IdsStore) -> list[MappingStatus]:
         """
         Evaluate mapping status for all IfcProduct/specification combinations.
 
@@ -252,7 +254,7 @@ class IfcStore:
                 states.append(status)
         return states
 
-    def get_mapping_summary(self, ids_store: IdsStore) -> List[ModelMappingSummary]:
+    def get_mapping_summary(self, ids_store: IdsStore) -> list[ModelMappingSummary]:
         """
         Aggregate mapping-state counters per specification.
 

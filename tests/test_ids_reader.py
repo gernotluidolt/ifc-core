@@ -4,7 +4,6 @@ import pytest
 
 from ifc_core.services.ids_reader import parse_ids_file
 
-
 IDS_FIXTURES = sorted(path for path in Path("tests/data").glob("*.ids"))
 
 

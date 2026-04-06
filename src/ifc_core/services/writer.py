@@ -1,9 +1,11 @@
+from collections.abc import Callable
+from typing import Any
+
 import ifcopenshell
 import ifcopenshell.api
-from typing import Dict, Any, List, Optional, Callable
 
-from ..models.ids import SpecificationManifest, ConcreteRequirement
-from ..models.ifc import ModificationResult, BulkSpecificationManifest
+from ..models.ids import ConcreteRequirement, SpecificationManifest
+from ..models.ifc import BulkSpecificationManifest, ModificationResult
 
 
 class ManifestWriter:
@@ -17,15 +19,15 @@ class ManifestWriter:
     def __init__(self, model: ifcopenshell.file):
         self.model = model
         # Pre-cache existing materials and classifications for performance
-        self._materials_cache: Dict[str, Any] = {
+        self._materials_cache: dict[str, Any] = {
             m.Name: m for m in model.by_type("IfcMaterial") if getattr(m, "Name", None)
         }
-        self._classifications_cache: Dict[str, Any] = {
+        self._classifications_cache: dict[str, Any] = {
             getattr(c, "Name", ""): c for c in model.by_type("IfcClassification")
         }
 
         # Dispatch table for requirement types
-        self._handlers: Dict[
+        self._handlers: dict[
             str, Callable[[Any, ConcreteRequirement], ModificationResult]
         ] = {
             "property": self._handle_property,
@@ -37,7 +39,7 @@ class ManifestWriter:
 
     # --- Internal Helpers ---
 
-    def _get_existing_pset_entity(self, element: Any, pset_name: str) -> Optional[Any]:
+    def _get_existing_pset_entity(self, element: Any, pset_name: str) -> Any | None:
         for rel in getattr(element, "IsDefinedBy", []) or []:
             if rel.is_a("IfcRelDefinesByProperties"):
                 pset = rel.RelatingPropertyDefinition
@@ -45,7 +47,7 @@ class ManifestWriter:
                     return pset
         return None
 
-    def _normalize_ifc_class(self, raw: Any) -> Optional[str]:
+    def _normalize_ifc_class(self, raw: Any) -> str | None:
         text = str(raw or "").strip()
         if not text:
             return None
@@ -172,7 +174,7 @@ class ManifestWriter:
 
     def apply_manifest(
         self, manifest: SpecificationManifest
-    ) -> List[ModificationResult]:
+    ) -> list[ModificationResult]:
         element = self.model.by_guid(manifest.element_guid)
         if not element:
             return [
@@ -209,7 +211,7 @@ class ManifestWriter:
 
     def apply_bulk_manifest(
         self, manifest: BulkSpecificationManifest
-    ) -> List[ModificationResult]:
+    ) -> list[ModificationResult]:
         results = []
         for guid in manifest.element_guids:
             element = self.model.by_guid(guid)
@@ -252,5 +254,5 @@ class ManifestWriter:
 
 def apply_manifest_to_element(
     model: ifcopenshell.file, manifest: SpecificationManifest
-) -> List[ModificationResult]:
+) -> list[ModificationResult]:
     return ManifestWriter(model).apply_manifest(manifest)

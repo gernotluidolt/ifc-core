@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import List, Optional
+
 from ifc_core.models.groups import BimGroup, BimGroupSummary
 
 
@@ -11,12 +11,12 @@ class AbstractGroupRepository(ABC):
     """
 
     @abstractmethod
-    def get_all(self) -> List[BimGroupSummary]:
+    def get_all(self) -> list[BimGroupSummary]:
         """Return a summary list of all existing groups."""
         pass
 
     @abstractmethod
-    def get_group(self, name: str) -> Optional[BimGroup]:
+    def get_group(self, name: str) -> BimGroup | None:
         """Fetch a full group by name with its corresponding GUIDs."""
         pass
 

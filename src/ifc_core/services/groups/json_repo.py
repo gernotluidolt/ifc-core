@@ -1,8 +1,8 @@
 import json
-import os
 from pathlib import Path
-from typing import List, Optional, Dict
+
 from ifc_core.models.groups import BimGroup, BimGroupSummary
+
 from .base import AbstractGroupRepository
 
 
@@ -21,18 +21,18 @@ class JsonFileGroupRepository(AbstractGroupRepository):
         self.ifc_path = Path(ifc_path)
         self.sidecar_path = self.ifc_path.parent / f"{self.ifc_path.stem}_groups.json"
 
-    def _load(self) -> Dict[str, List[str]]:
+    def _load(self) -> dict[str, list[str]]:
         """Read the group manifest from disk."""
         if not self.sidecar_path.exists():
             return {}
         try:
-            with open(self.sidecar_path, "r", encoding="utf-8") as fh:
+            with open(self.sidecar_path, encoding="utf-8") as fh:
                 data = json.load(fh)
                 return {str(k): list(v or []) for k, v in data.items()}
         except Exception:
             return {}
 
-    def _save(self, data: Dict[str, List[str]]) -> bool:
+    def _save(self, data: dict[str, list[str]]) -> bool:
         """Write the group manifest to disk."""
         try:
             with open(self.sidecar_path, "w", encoding="utf-8") as fh:
@@ -41,12 +41,12 @@ class JsonFileGroupRepository(AbstractGroupRepository):
         except Exception:
             return False
 
-    def get_all(self) -> List[BimGroupSummary]:
+    def get_all(self) -> list[BimGroupSummary]:
         """Return a list of all groups and their element counts."""
         data = self._load()
         return [BimGroupSummary(name=k, count=len(v)) for k, v in data.items()]
 
-    def get_group(self, name: str) -> Optional[BimGroup]:
+    def get_group(self, name: str) -> BimGroup | None:
         """Return a specific group by name."""
         data = self._load()
         if name not in data:

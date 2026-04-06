@@ -1,7 +1,8 @@
-import ifctester
 from pathlib import Path
-from typing import List
-from ..models.ids import IdsSpecification, IdsRequirement
+
+import ifctester
+
+from ..models.ids import IdsRequirement, IdsSpecification
 
 
 def _map_facet_to_requirement(facet) -> IdsRequirement:
@@ -79,7 +80,7 @@ def _map_facet_to_requirement(facet) -> IdsRequirement:
     )
 
 
-def parse_ids_file(path: Path) -> List[IdsSpecification]:
+def parse_ids_file(path: Path) -> list[IdsSpecification]:
     """Opens an IDS file and returns a list of high-level Spec objects."""
     ids_data = ifctester.ids.open(str(path))
     parsed_specs = []

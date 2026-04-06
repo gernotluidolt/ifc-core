@@ -1,5 +1,6 @@
+from typing import Any
+
 from pydantic import BaseModel, Field
-from typing import List, Optional, Any
 
 
 class IdsRequirement(BaseModel):
@@ -11,22 +12,22 @@ class IdsRequirement(BaseModel):
     """
 
     type: str  # Property, Attribute, Material, etc.
-    name: Optional[str] = None
-    value: Optional[str] = None
-    property_set: Optional[str] = None
-    instructions: Optional[str] = None
-    options: List[str] = Field(default_factory=list)  # ["Internal", "External"]
-    min_inclusive: Optional[float] = None
-    max_inclusive: Optional[float] = None
+    name: str | None = None
+    value: str | None = None
+    property_set: str | None = None
+    instructions: str | None = None
+    options: list[str] = Field(default_factory=list)  # ["Internal", "External"]
+    min_inclusive: float | None = None
+    max_inclusive: float | None = None
 
 
 class IdsSpecification(BaseModel):
     """Parsed representation of one IDS specification block."""
 
     name: str
-    identifier: Optional[str] = None
-    applicability: List[IdsRequirement]
-    requirements: List[IdsRequirement]
+    identifier: str | None = None
+    applicability: list[IdsRequirement]
+    requirements: list[IdsRequirement]
 
 
 class ConcreteRequirement(BaseModel):
@@ -40,7 +41,7 @@ class ConcreteRequirement(BaseModel):
     type: str
     name: str
     value: Any
-    property_set: Optional[str] = None
+    property_set: str | None = None
 
 
 class SpecificationManifest(BaseModel):
@@ -52,4 +53,4 @@ class SpecificationManifest(BaseModel):
 
     element_guid: str
     specification_name: str
-    requirements: List[ConcreteRequirement]
+    requirements: list[ConcreteRequirement]

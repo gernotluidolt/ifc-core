@@ -1,14 +1,15 @@
-import ifcopenshell
 from collections import defaultdict
-from typing import Optional, List
+
+import ifcopenshell
+
 from ..models.ifc import (
-    SpatialNode,
-    CountedItem,
-    PSetSummary,
     ClassificationNode,
     ClassificationTree,
+    CountedItem,
     LayeredMaterialItem,
     LayeredMaterialsSummary,
+    PSetSummary,
+    SpatialNode,
 )
 
 
@@ -31,7 +32,7 @@ def _resolve_system_name(obj) -> str | None:
     return None
 
 
-def _get_contained_elements(parent) -> List:
+def _get_contained_elements(parent) -> list:
     elements = []
     # Elements that are spatially decomposed from this parent
     for rel in getattr(parent, "IsDecomposedBy", []):
@@ -47,8 +48,8 @@ def _get_contained_elements(parent) -> List:
 
 
 def get_spatial_tree(
-    model: ifcopenshell.file, parent_guid: Optional[str] = None
-) -> List[SpatialNode]:
+    model: ifcopenshell.file, parent_guid: str | None = None
+) -> list[SpatialNode]:
     nodes = []
 
     if parent_guid is None:
@@ -110,7 +111,7 @@ def get_spatial_tree(
     return nodes
 
 
-def get_psets(model: ifcopenshell.file) -> List[PSetSummary]:
+def get_psets(model: ifcopenshell.file) -> list[PSetSummary]:
     pset_map = defaultdict(set)
     pset_counts = defaultdict(int)
 
@@ -134,7 +135,7 @@ def get_psets(model: ifcopenshell.file) -> List[PSetSummary]:
     ]
 
 
-def get_materials(model: ifcopenshell.file) -> List[CountedItem]:
+def get_materials(model: ifcopenshell.file) -> list[CountedItem]:
     mat_counts = defaultdict(int)
 
     for rel in model.by_type("IfcRelAssociatesMaterial"):
@@ -154,7 +155,7 @@ def get_materials(model: ifcopenshell.file) -> List[CountedItem]:
     return [CountedItem(name=k, element_count=v) for k, v in mat_counts.items()]
 
 
-def get_entity_counts(model: ifcopenshell.file) -> List[CountedItem]:
+def get_entity_counts(model: ifcopenshell.file) -> list[CountedItem]:
     entity_counts = defaultdict(int)
     for element in model.by_type("IfcProduct"):
         try:

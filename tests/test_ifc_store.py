@@ -1,7 +1,10 @@
-
 from ifc_core import IfcStore
+from ifc_core.models.ids import (
+    ConcreteRequirement,
+    IdsSpecification,
+    SpecificationManifest,
+)
 from ifc_core.models.ifc import MappingState, MappingStatus, ModificationResult
-from ifc_core.models.ids import ConcreteRequirement, IdsSpecification, SpecificationManifest
 
 
 class _DummyIdsStore:
@@ -29,7 +32,9 @@ def test_ifc_store_save_writes_target_and_clears_cache(mock_ifc_store, tmp_path)
     assert mock_ifc_store._mapping_cache == {}
 
 
-def test_ifc_store_apply_specification_delegates_and_clears_cache(monkeypatch, mock_ifc_store):
+def test_ifc_store_apply_specification_delegates_and_clears_cache(
+    monkeypatch, mock_ifc_store
+):
     wall = mock_ifc_store._model.by_type("IfcWall")[0]
     mock_ifc_store._mapping_cache["seed"] = "value"
 
@@ -46,7 +51,9 @@ def test_ifc_store_apply_specification_delegates_and_clears_cache(monkeypatch, m
     manifest = SpecificationManifest(
         element_guid=wall.GlobalId,
         specification_name="Spec",
-        requirements=[ConcreteRequirement(type="Attribute", name="Name", value="Changed")],
+        requirements=[
+            ConcreteRequirement(type="Attribute", name="Name", value="Changed")
+        ],
     )
 
     results = mock_ifc_store.apply_specification(manifest)
@@ -55,7 +62,9 @@ def test_ifc_store_apply_specification_delegates_and_clears_cache(monkeypatch, m
     assert results[0].success
 
 
-def test_ifc_store_apply_bulk_manifest_delegates_and_clears_cache(monkeypatch, mock_ifc_store):
+def test_ifc_store_apply_bulk_manifest_delegates_and_clears_cache(
+    monkeypatch, mock_ifc_store
+):
     wall = mock_ifc_store._model.by_type("IfcWall")[0]
     mock_ifc_store._mapping_cache["seed"] = "value"
 
@@ -74,7 +83,9 @@ def test_ifc_store_apply_bulk_manifest_delegates_and_clears_cache(monkeypatch, m
     manifest = BulkSpecificationManifest(
         element_guids=[wall.GlobalId],
         specification_name="Bulk",
-        requirements=[ConcreteRequirement(type="Attribute", name="Name", value="Changed")],
+        requirements=[
+            ConcreteRequirement(type="Attribute", name="Name", value="Changed")
+        ],
     )
 
     results = mock_ifc_store.apply_bulk_manifest(manifest)
@@ -125,16 +136,24 @@ def test_ifc_store_check_mapping_status_uses_cache(monkeypatch, mock_ifc_store):
     assert any(s.element_guid == slab.GlobalId for s in first)
 
 
-def test_ifc_store_get_mapping_summary_counts_states_and_ignores_unknown_spec(monkeypatch, mock_ifc_store):
+def test_ifc_store_get_mapping_summary_counts_states_and_ignores_unknown_spec(
+    monkeypatch, mock_ifc_store
+):
     spec = IdsSpecification(name="SpecA", applicability=[], requirements=[])
     ids_store = _DummyIdsStore([spec])
 
     statuses = [
-        MappingStatus(element_guid="1", spec_name="SpecA", state=MappingState.COMPLIANT),
+        MappingStatus(
+            element_guid="1", spec_name="SpecA", state=MappingState.COMPLIANT
+        ),
         MappingStatus(element_guid="2", spec_name="SpecA", state=MappingState.INVALID),
-        MappingStatus(element_guid="3", spec_name="SpecA", state=MappingState.INCOMPLETE),
+        MappingStatus(
+            element_guid="3", spec_name="SpecA", state=MappingState.INCOMPLETE
+        ),
         MappingStatus(element_guid="4", spec_name="SpecA", state=MappingState.UNMAPPED),
-        MappingStatus(element_guid="x", spec_name="OtherSpec", state=MappingState.COMPLIANT),
+        MappingStatus(
+            element_guid="x", spec_name="OtherSpec", state=MappingState.COMPLIANT
+        ),
     ]
 
     monkeypatch.setattr(mock_ifc_store, "check_mapping_status", lambda _ids: statuses)

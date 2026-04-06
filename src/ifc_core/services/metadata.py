@@ -1,4 +1,5 @@
 import ifcopenshell
+
 from ..models.ifc import ModelMetadata
 
 

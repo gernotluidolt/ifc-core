@@ -1,9 +1,8 @@
-import os
-import sys
 import inspect
+import sys
 from enum import Enum
 from pathlib import Path
-from typing import get_args, get_origin, Union, Any, List, Optional, Dict, Type
+from typing import Any, Union, get_args, get_origin
 
 try:
     from pydantic import BaseModel
@@ -14,7 +13,8 @@ except ImportError:
 # Ensure ifc_core is in path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from ifc_core.models import ifc, ids, groups
+from ifc_core.models import groups, ids, ifc
+
 
 def resolve_output_path() -> Path:
     """Determine output location for generated types.
@@ -38,6 +38,7 @@ TS_TYPE_MAP = {
     type(None): "null",
 }
 
+
 def get_ts_type(py_type: Any) -> str:
     """Recursively convert Python types to TypeScript types."""
     origin = get_origin(py_type)
@@ -46,10 +47,10 @@ def get_ts_type(py_type: Any) -> str:
     if py_type in TS_TYPE_MAP:
         return TS_TYPE_MAP[py_type]
 
-    if origin is list or origin is List:
+    if origin is list or origin is list:
         return f"{get_ts_type(args[0])}[]"
 
-    if origin is dict or origin is Dict:
+    if origin is dict or origin is dict:
         return f"{{ [key: {get_ts_type(args[0])}]: {get_ts_type(args[1])} }}"
 
     if origin is Union:
@@ -60,7 +61,7 @@ def get_ts_type(py_type: Any) -> str:
             # It was Optional[T]
             return ts_args[0]
         # Sort and join with pipe
-        return f"({ ' | '.join(ts_args) })"
+        return f"({' | '.join(ts_args)})"
 
     if hasattr(py_type, "__forward_arg__"):
         return py_type.__forward_arg__
@@ -70,8 +71,9 @@ def get_ts_type(py_type: Any) -> str:
             return py_type.__name__
         if issubclass(py_type, BaseModel):
             return py_type.__name__
-    
+
     return name
+
 
 def generate_ts(output_path: Path):
     lines = [
@@ -85,7 +87,7 @@ def generate_ts(output_path: Path):
     # Collect all models and enums from the modules
     modules = [ifc, ids, groups]
     processed_names = set()
-    
+
     classes_to_process = []
     for mod in modules:
         for name, obj in inspect.getmembers(mod):
@@ -103,38 +105,44 @@ def generate_ts(output_path: Path):
             lines.extend(enum_values)
             lines.append(";")
             lines.append("")
-        
+
         elif issubclass(obj, BaseModel):
             lines.append(f"export interface {obj.__name__} {{")
-            
+
             # Use __annotations__ to get types
             for field_name, field_type in obj.__annotations__.items():
                 ts_type = get_ts_type(field_type)
-                
+
                 # Check if it has a default Value (Optionality)
                 is_optional = False
-                if get_origin(field_type) is Union and type(None) in get_args(field_type):
+                if get_origin(field_type) is Union and type(None) in get_args(
+                    field_type
+                ):
                     is_optional = True
-                
+
                 # Manual override for some recursive cases if needed
-                if field_name == "children" and obj.__name__ in ["SpatialNode", "ClassificationNode"]:
+                if field_name == "children" and obj.__name__ in [
+                    "SpatialNode",
+                    "ClassificationNode",
+                ]:
                     # Ensure it matches the TS recursive type
                     ts_type = f"{obj.__name__}[]"
 
                 opt_char = "?" if is_optional else ""
                 lines.append(f"  {field_name}{opt_char}: {ts_type};")
-            
+
             lines.append("}")
             lines.append("")
 
     content = "\n".join(lines)
-    
+
     # Save
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with open(output_path, "w", encoding="utf-8") as f:
         f.write(content)
-    
+
     print(f"Successfully generated types to {output_path}")
+
 
 if __name__ == "__main__":
     out = resolve_output_path()
