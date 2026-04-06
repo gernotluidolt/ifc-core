@@ -239,7 +239,14 @@ class IfcStore:
         """
         states = []
         for spec in ids_store.specifications:
-            for element in self._model.by_type("IfcProduct"):
+            # Narrow search scope to the specific entity type if defined in IDS
+            entity_type = "IfcProduct"
+            for req in spec.applicability:
+                if req.type.lower() in ("entity", "ifcentity", "class"):
+                    entity_type = req.value or req.name or "IfcProduct"
+                    break
+
+            for element in self._model.by_type(entity_type):
                 guid = getattr(element, "GlobalId", None)
                 if not guid:
                     continue
