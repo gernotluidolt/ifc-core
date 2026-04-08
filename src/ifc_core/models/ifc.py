@@ -79,9 +79,10 @@ class CountedItem(BaseModel):
 
 
 class PSetSummary(CountedItem):
-    """Property set summary including the parameter names it exposes."""
+    """Property set summary including the parameter names it exposes and their values."""
 
-    parameters: list[str]
+    parameters: list[str] = []
+    children: list["PSetSummary"] = []
 
 
 class ClassificationNode(BaseModel):

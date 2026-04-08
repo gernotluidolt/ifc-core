@@ -50,89 +50,158 @@ def _get_contained_elements(parent) -> list:
 def get_spatial_tree(
     model: ifcopenshell.file, parent_guid: str | None = None
 ) -> list[SpatialNode]:
-    nodes = []
+    """Helper to build a deep spatial tree recursively."""
 
-    if parent_guid is None:
-        sites = model.by_type("IfcSite")
-        if not sites:
-            sites = model.by_type("IfcBuilding")
+    def build_node(item) -> SpatialNode:
+        children = _get_contained_elements(item)
 
-        for site in sites:
-            children = _get_contained_elements(site)
-            nodes.append(
+        # If it's a storey, we group elements by type as children
+        if item.is_a("IfcBuildingStorey"):
+            type_counts = defaultdict(int)
+            for el in children:
+                type_counts[el.is_a()] += 1
+
+            type_nodes = [
                 SpatialNode(
-                    guid=site.GlobalId,
-                    name=getattr(site, "Name", "") or "Unnamed",
-                    type=site.is_a(),
-                    element_count=len(children),
-                    has_children=len(children) > 0,
-                    children=None,
-                )
-            )
-        return nodes
-
-    parent = model.by_guid(parent_guid)
-    if not parent:
-        return []
-
-    if parent.is_a("IfcBuildingStorey"):
-        elements = _get_contained_elements(parent)
-        class_counts = defaultdict(int)
-        for el in elements:
-            class_counts[el.is_a()] += 1
-
-        for ifc_type, count in class_counts.items():
-            nodes.append(
-                SpatialNode(
-                    guid=f"{parent.GlobalId}:{ifc_type}",
-                    name=ifc_type,
-                    type=ifc_type,
-                    element_count=count,
+                    guid=f"{item.GlobalId}:{t}",
+                    name=t,
+                    type=t,
+                    element_count=c,
                     has_children=False,
-                    children=None,
+                    children=[],
                 )
+                for t, c in sorted(type_counts.items())
+            ]
+            
+            return SpatialNode(
+                guid=item.GlobalId,
+                name=getattr(item, "Name", "") or "Unnamed Storey",
+                type=item.is_a(),
+                element_count=len(children),
+                has_children=len(type_nodes) > 0,
+                children=type_nodes,
             )
-        return nodes
 
-    children = _get_contained_elements(parent)
-    for child in children:
-        child_elements = _get_contained_elements(child)
-        nodes.append(
-            SpatialNode(
-                guid=child.GlobalId,
-                name=getattr(child, "Name", "") or "Unnamed",
-                type=child.is_a(),
-                element_count=len(child_elements),
-                has_children=len(child_elements) > 0,
-                children=None,
-            )
+        # Standard recursive step for Site/Building
+        child_nodes = [build_node(c) for c in children if c.is_a("IfcSpatialElement")]
+        
+        return SpatialNode(
+            guid=item.GlobalId,
+            name=getattr(item, "Name", "") or "Unnamed",
+            type=item.is_a(),
+            element_count=len(children),
+            has_children=len(child_nodes) > 0,
+            children=child_nodes,
         )
 
-    return nodes
+    # If parent_guid is provided, we still support lazy fetch for API compatibility
+    if parent_guid is not None:
+        parent = model.by_guid(parent_guid)
+        if not parent:
+            return []
+        
+        if parent.is_a("IfcBuildingStorey"):
+            elements = _get_contained_elements(parent)
+            class_counts = defaultdict(int)
+            for el in elements:
+                class_counts[el.is_a()] += 1
+            return [
+                SpatialNode(
+                    guid=f"{parent.GlobalId}:{t}",
+                    name=t, type=t, element_count=c, has_children=False, children=None
+                )
+                for t, c in sorted(class_counts.items())
+            ]
+        
+        children = _get_contained_elements(parent)
+        return [
+            SpatialNode(
+                guid=c.GlobalId,
+                name=getattr(c, "Name", "") or "Unnamed",
+                type=c.is_a(),
+                element_count=len(_get_contained_elements(c)),
+                has_children=len(_get_contained_elements(c)) > 0,
+                children=None
+            )
+            for c in children if c.is_a("IfcSpatialElement")
+        ]
+
+    # Default: Return deep tree from the root(s)
+    roots = model.by_type("IfcSite") or model.by_type("IfcBuilding")
+    return [build_node(r) for r in roots]
 
 
 def get_psets(model: ifcopenshell.file) -> list[PSetSummary]:
-    pset_map = defaultdict(set)
-    pset_counts = defaultdict(int)
+    """List unique property sets, their parameters, and unique values with counts."""
+    # Structure: pset_name -> prop_name -> value -> element_count
+    data: dict[str, dict[str, dict[Any, int]]] = defaultdict(
+        lambda: defaultdict(lambda: defaultdict(int))
+    )
+    pset_elements: dict[str, set[str]] = defaultdict(set)
 
     for rel in model.by_type("IfcRelDefinesByProperties"):
         pset = rel.RelatingPropertyDefinition
         if not pset or not pset.is_a("IfcPropertySet"):
             continue
 
-        name = getattr(pset, "Name", "") or "Unnamed"
-
-        objects = getattr(rel, "RelatedObjects", [])
-        pset_counts[name] += len(objects)
+        pset_name = str(getattr(pset, "Name", "") or "Unnamed")
+        related_elements = getattr(rel, "RelatedObjects", [])
+        element_guids = [getattr(e, "GlobalId", None) for e in related_elements]
+        element_guids = [g for g in element_guids if g]
+        
+        pset_elements[pset_name].update(element_guids)
 
         for prop in getattr(pset, "HasProperties", []):
-            prop_name = getattr(prop, "Name", "") or "Unnamed"
-            pset_map[name].add(prop_name)
+            if not prop.is_a("IfcPropertySingleValue"):
+                continue
+                
+            prop_name = str(getattr(prop, "Name", "") or "Unnamed")
+            val = getattr(prop, "NominalValue", None)
+            
+            # Extract raw value from IfcValue (which is a wrapped type)
+            raw_val = val.wrappedValue if hasattr(val, "wrappedValue") else val
+            if raw_val is None:
+                raw_val = ""
+            
+            # We increment by the number of elements this property set is assigned to
+            data[pset_name][prop_name][raw_val] += len(element_guids)
 
-    return [
-        PSetSummary(name=name, element_count=pset_counts[name], parameters=list(params))
-        for name, params in pset_map.items()
-    ]
+    results = []
+    for pset_name, props in sorted(data.items()):
+        property_nodes = []
+        for prop_name, values in sorted(props.items()):
+            value_nodes = [
+                PSetSummary(
+                    name=str(v),
+                    element_count=count,
+                    parameters=[],
+                    children=[]
+                )
+                for v, count in sorted(values.items(), key=lambda x: str(x[0]))
+            ]
+            
+            # Aggregate total elements for this property
+            total_prop_count = sum(v.element_count for v in value_nodes)
+            
+            property_nodes.append(
+                PSetSummary(
+                    name=prop_name,
+                    element_count=total_prop_count,
+                    parameters=[],
+                    children=value_nodes
+                )
+            )
+
+        results.append(
+            PSetSummary(
+                name=pset_name,
+                element_count=len(pset_elements[pset_name]),
+                parameters=list(props.keys()),
+                children=property_nodes
+            )
+        )
+
+    return results
 
 
 def get_materials(model: ifcopenshell.file) -> list[CountedItem]:
