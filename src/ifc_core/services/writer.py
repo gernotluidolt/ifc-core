@@ -35,6 +35,7 @@ class ManifestWriter:
             "entity": self._handle_entity,
             "material": self._handle_material,
             "classification": self._handle_classification,
+            "pset": self._handle_property,
         }
 
     # --- Internal Helpers ---

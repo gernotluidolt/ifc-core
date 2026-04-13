@@ -43,11 +43,18 @@ def _map_facet_to_requirement(facet) -> IdsRequirement:
     # For entity facets, class names are commonly stored in the "name" field.
     if raw_value is None and req_type == "entity":
         raw_value = req_name
+    
+    # Classification/Material Support: extract system name/identifier
+    raw_system = getattr(facet, "system", None)
+    if not req_name and isinstance(raw_system, str) and raw_system:
+        req_name = raw_system
 
     # Check for restrictions (Enumerations/Ranges)
+    if restriction is None and hasattr(raw_value, "enumeration"):
+        restriction = raw_value
+
     if restriction:
         res = restriction
-
         # Handle Enumerations (List of choices)
         if isinstance(res, dict):
             if res.get("enumeration"):
@@ -66,12 +73,19 @@ def _map_facet_to_requirement(facet) -> IdsRequirement:
             if hasattr(res, "maxInclusive") and res.maxInclusive is not None:
                 max_val = float(res.maxInclusive)
 
+    # Final Value resolution
+    final_value = None
+    if raw_value is not None and not isinstance(raw_value, dict) and not hasattr(raw_value, "enumeration"):
+        final_value = str(raw_value)
+    
+    # Smart Fallback: if we have exactly one option, we can use it as a concrete value
+    if final_value is None and len(options) == 1:
+        final_value = options[0]
+
     return IdsRequirement(
         type=req_type,
         name=req_name,
-        value=str(raw_value)
-        if raw_value is not None and not isinstance(raw_value, dict)
-        else None,
+        value=final_value,
         property_set=req_property_set,
         instructions=getattr(facet, "instructions", None),
         options=options,
