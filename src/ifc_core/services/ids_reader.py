@@ -33,6 +33,7 @@ def _map_facet_to_requirement(facet) -> IdsRequirement:
     options = []
     min_val = None
     max_val = None
+    data_type = None
     raw_value = getattr(facet, "value", None)
 
     # ifctester may represent restrictions either in "restriction" or in a dict-like "value"
@@ -63,6 +64,8 @@ def _map_facet_to_requirement(facet) -> IdsRequirement:
                 min_val = float(res["minInclusive"])
             if res.get("maxInclusive") is not None:
                 max_val = float(res["maxInclusive"])
+            if res.get("base"):
+                data_type = str(res["base"]).replace("xs:", "")
         else:
             if hasattr(res, "enumeration") and res.enumeration:
                 options = [str(v) for v in res.enumeration]
@@ -72,6 +75,12 @@ def _map_facet_to_requirement(facet) -> IdsRequirement:
                 min_val = float(res.minInclusive)
             if hasattr(res, "maxInclusive") and res.maxInclusive is not None:
                 max_val = float(res.maxInclusive)
+            
+            # Extract base type from ifctester object
+            if hasattr(res, "base") and res.base:
+                data_type = str(res.base).replace("xs:", "")
+            elif hasattr(res, "baseName") and res.baseName:
+                data_type = str(res.baseName).replace("xs:", "")
 
     # Final Value resolution
     final_value = None
@@ -89,6 +98,7 @@ def _map_facet_to_requirement(facet) -> IdsRequirement:
         property_set=req_property_set,
         instructions=getattr(facet, "instructions", None),
         options=options,
+        data_type=data_type,
         min_inclusive=min_val,
         max_inclusive=max_val,
     )

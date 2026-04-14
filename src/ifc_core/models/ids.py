@@ -17,6 +17,7 @@ class IdsRequirement(BaseModel):
     property_set: str | None = None
     instructions: str | None = None
     options: list[str] = Field(default_factory=list)  # ["Internal", "External"]
+    data_type: str | None = None  # e.g., "decimal", "integer", "boolean", "string"
     min_inclusive: float | None = None
     max_inclusive: float | None = None
 

@@ -151,6 +151,7 @@ class SharedValue(BaseModel):
     is_mixed: bool = (
         False  # True if the selected GUIDs have different values for this key
     )
+    other_values: list[Any] = []  # If mixed, contains the unique set of values present
 
 
 class SelectionAnalysis(BaseModel):
