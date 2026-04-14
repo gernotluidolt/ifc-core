@@ -158,3 +158,22 @@ class SelectionAnalysis(BaseModel):
 
     common_attributes: dict[str, SharedValue]
     common_psets: dict[str, dict[str, SharedValue]]
+
+class AnchorGroup(BaseModel):
+    """A cluster of elements sharing a common anchor value."""
+
+    value: str
+    count: int
+
+
+class AnchorGroupsResponse(BaseModel):
+    """Response payload for anchor-based discovery."""
+
+    ok: bool
+    anchor_name: str
+    pivot_mode: str
+    groups: list[AnchorGroup]
+    unanchored_count: int
+    total_count: int
+    storey_guid: str | None = None
+    error: str | None = None
