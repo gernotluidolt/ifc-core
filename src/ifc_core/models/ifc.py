@@ -177,3 +177,12 @@ class AnchorGroupsResponse(BaseModel):
     total_count: int
     storey_guid: str | None = None
     error: str | None = None
+
+
+class AnchorSelectResponse(BaseModel):
+    """Response payload for anchor selection actions."""
+
+    ok: bool
+    selected_count: int
+    candidate_count: int
+    error: str | None = None
