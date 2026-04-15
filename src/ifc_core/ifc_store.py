@@ -79,7 +79,7 @@ class IfcStore:
         Returns:
             Model metadata with schema version, author, and timestamp.
         """
-        return get_model_info(self._model)
+        return get_model_info(self._model, filename=self.path.name if self.path else None)
 
     def save(self, target_path: Path | None = None):
         """Persist model changes and clear mapping caches.

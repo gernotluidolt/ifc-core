@@ -12,6 +12,8 @@ class ModelMetadata(BaseModel):
     schema_version: str
     author: str
     timestamp: str
+    file_name: str | None = None
+    has_multilayered_elements: bool = False
 
 
 class ModificationResult(BaseModel):

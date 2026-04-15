@@ -72,7 +72,7 @@ def get_ts_type(py_type: Any) -> str:
         if issubclass(py_type, BaseModel):
             return py_type.__name__
 
-    return name
+    return "any"
 
 
 def generate_ts(output_path: Path):
