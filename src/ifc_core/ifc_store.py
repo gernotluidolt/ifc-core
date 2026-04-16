@@ -22,14 +22,7 @@ from .models.ifc import (
     SelectionAnalysis,
     SpatialNode,
 )
-from .services.discovery import (
-    get_classification_tree,
-    get_entity_counts,
-    get_layered_materials,
-    get_materials,
-    get_psets,
-    get_spatial_tree,
-)
+from .services.discovery import DiscoveryAggregator
 from .services.groups.base import AbstractGroupRepository
 from .services.inspector import analyze_guids
 from .services.metadata import get_model_info
@@ -63,6 +56,7 @@ class IfcStore:
             raise ValueError("Either 'path' or 'model' must be provided to IfcStore")
         self._mapping_cache: dict[str, MappingStatus] = {}
         self.groups: AbstractGroupRepository | None = None
+        self._discovery = DiscoveryAggregator(self._model)
 
     def bind_groups(self, repo: AbstractGroupRepository):
         """Inject a grouping storage backend into the store."""
@@ -100,59 +94,32 @@ class IfcStore:
         self._clear_cache()
 
     # -------------------------------------------------------------------------
-    # DISCOVERY API
+    # DISCOVERY API (Delegated to DiscoveryAggregator)
     # -------------------------------------------------------------------------
 
     def get_spatial_tree(self, parent_guid: str | None = None) -> list[SpatialNode]:
-        """Return spatial hierarchy nodes for UI tree views.
-
-        Args:
-            parent_guid: Optional GUID to lazily fetch one hierarchy level.
-
-        Returns:
-            Spatial tree nodes rooted at the requested parent.
-        """
-        return get_spatial_tree(self._model, parent_guid)
+        """Return spatial hierarchy nodes for UI tree views."""
+        return self._discovery.get_spatial_tree(parent_guid)
 
     def get_psets(self) -> list[PSetSummary]:
-        """List unique property sets with occurrence counts and parameter names.
-
-        Returns:
-            Property set summaries discovered in the model.
-        """
-        return get_psets(self._model)
+        """List unique property sets with occurrence counts and parameter names."""
+        return self._discovery.get_psets()
 
     def get_materials(self) -> list[CountedItem]:
-        """List known materials with usage counts across elements.
-
-        Returns:
-            Materials discovered in the model, with element counts.
-        """
-        return get_materials(self._model)
+        """List known materials with usage counts across elements."""
+        return self._discovery.get_materials()
 
     def get_entity_counts(self) -> list[CountedItem]:
-        """List IfcProduct entity types with occurrence counts.
-
-        Returns:
-            Entity name/count pairs.
-        """
-        return get_entity_counts(self._model)
+        """List IfcProduct entity types with occurrence counts."""
+        return self._discovery.get_entity_counts()
 
     def get_classification_tree(self) -> ClassificationTree:
-        """Return full model classification tree including unclassified bucket.
-
-        Returns:
-            Classification tree DTO.
-        """
-        return get_classification_tree(self._model)
+        """Return full model classification tree including unclassified bucket."""
+        return self._discovery.get_classification_tree()
 
     def get_layered_materials(self) -> LayeredMaterialsSummary:
-        """Return layered material aggregates.
-
-        Returns:
-            Layered materials summary DTO.
-        """
-        return get_layered_materials(self._model)
+        """Return layered material aggregates."""
+        return self._discovery.get_layered_materials()
 
     # -------------------------------------------------------------------------
     # QUERY & INSPECTION ENGINE
