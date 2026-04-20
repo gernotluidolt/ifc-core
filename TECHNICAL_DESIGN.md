@@ -6,6 +6,7 @@ The `ifc_core` package is a **Stateless Data Engine**. It provides high-performa
 
 ## 1. Discovery DTOs (Read-Only)
 These models define how to describe the IFC file to the outside world.
+
 ```Python
 from pydantic import BaseModel, Field
 from typing import List, Optional, Any, Union, Dict
@@ -36,7 +37,23 @@ class PSetSummary(CountedItem):
 ```
 
 ---
-## 2. The Query Engine 
+
+## 2. Group Management DTOs
+Support for logical groupings of IFC elements stored in sidecar repositories.
+
+```Python
+class BimGroupSummary(BaseModel):
+    name: str
+    count: int
+
+class BimGroup(BaseModel):
+    name: str
+    element_guids: List[str]
+```
+
+---
+
+## 3. The Query Engine 
 A recursive search algorithm that translates this DTO into `ifcopenshell` filtered collections.
 ```Python
 class ComparisonOperator(str, Enum):
@@ -47,7 +64,7 @@ class ComparisonOperator(str, Enum):
     CONTAINS = "contains"
 
 class FilterCriterion(BaseModel):
-    category: str # "Attribute", "PSet", "Material", "Story", "Geometry"
+    category: str # "Attribute", "PSet", "Material", "Story", "Geometry", "MappingStatus"
     name: str     # e.g., "LoadBearing", "Height"
     operator: ComparisonOperator
     value: Any
@@ -60,7 +77,8 @@ class ComplexQuery(BaseModel):
 ```
 
 ---
-## 3. Analysis DTOs (Multi-Element Inspection)
+
+## 4. Analysis DTOs (Multi-Element Inspection)
 Provides the logic to "intersect" data across many elements to find commonalities and conflicts.
 ```Python
 class SharedValue(BaseModel):
@@ -68,109 +86,77 @@ class SharedValue(BaseModel):
     is_mixed: bool = False # True if the selected GUIDs have different values for this key
 
 class SelectionAnalysis(BaseModel):
-    """
-    Requirements for Implementation:
-    1. Only return Psets/Attributes present in EVERY provided GUID.
-    2. If values differ across GUIDs, mark is_mixed=True.
-    """
     common_attributes: Dict[str, SharedValue]
     common_psets: Dict[str, Dict[str, SharedValue]]
+    common_classifications: Dict[str, SharedValue]
 ```
 
 ---
 
-## 4. Core Package Requirements (Engine)
-The `IfcStore` class manages the following "Engine" methods:
+## 5. Architectural Component: Services & Aggregators
 
-| **Method**             | **Input**      | **Returns**         | **Implementation Detail**                         |
-| ---------------------- | -------------- | ------------------- | ------------------------------------------------- |
-| `get_model_metadata()` | -              | `ModelMetadata`     | Extract from Header and `IfcProject`.             |
-| `get_spatial_tree()`   | `parent_guid`  | `List[SpatialNode]` | Translates implicit decomposition dynamically rendering leaf nodes virtually resolving IFC Classes within `IfcBuildingStorey`. |
-| `get_psets()`          | -              | `List[PSetSummary]` | Scan model for all unique `IfcPropertySet` names tracking quantity endpoints continuously tracking occurrences. |
-| `get_materials()`      | -              | `List[CountedItem]` | Scan all `IfcMaterial` associations mapping recursively iterating over layersets natively. |
-| **`execute_query()`**  | `ComplexQuery` | `List[str]`         | Comprehensive recursive evaluation enforcing `AND/OR/NOT` comparisons scaling `Materials`, existence assertions, and mapped properties. |
-| **`analyze_guids()`**  | `List[str]`    | `SelectionAnalysis` | Intersects common overlaps explicitly resolving edge `<Mixed>` property occurrences seamlessly identifying discrepancies natively. |
+The package has transitioned from a flat service structure to a granular, domain-specific organization under `src/ifc_core/services/`.
 
-## 5. Mapping State & Progress DTOs
-These models allow the App to show a "Dashboard" or "Progress Bar" of the enrichment work.
+### The Discovery Stack (Read Optimization)
+Discovery logic is split into specialized modules, all unified by the `DiscoveryAggregator`.
+
+- **`services.discovery.spatial`**: Spatial hierarchy and decomposition.
+- **`services.discovery.psets`**: Property set scanning and caching.
+- **`services.discovery.classifications`**: Classification tree traversals.
+- **`services.discovery.materials`**: Material association resolution.
 
 ```Python
-from pydantic import BaseModel
-from typing import List, Optional, Any, Dict
-from enum import Enum
+class DiscoveryAggregator:
+    """Unified entry point for read-only model discovery."""
+    def __init__(self, model: ifcopenshell.file): ...
+    def get_spatial_tree(self) -> List[SpatialNode]: ...
+    def get_psets(self) -> List[PSetSummary]: ...
+    def get_classification_tree(self) -> List[ClassificationNode]: ...
+```
 
+### The Groups Stack (Sidecar Persistence)
+Uses an Abstract Base Class to decouple `ifc-core` from specific storage implementations.
+
+- **`AbstractGroupRepository`**: Interface for CRUD on element groups.
+- **`JsonFileGroupRepository`**: Current implementation using `{filename}_groups.json` sidecar files.
+
+---
+
+## 6. Mapping State & Progress DTOs
+
+```Python
 class MappingState(str, Enum):
-    UNMAPPED = "UNMAPPED"         # Element might not match applicability initially (e.g. IfcBuildingElementProxy) and needs type change, or lacks PSets/Attrs
-    INCOMPLETE = "INCOMPLETE"     # Required parameters exist, but missing values
-    INVALID = "INVALID"           # Required parameters exist, but values violate IDS options/constraints
-    COMPLIANT = "COMPLIANT"       # All IDS requirements met exactly
+    UNMAPPED = "UNMAPPED"
+    INCOMPLETE = "INCOMPLETE"
+    INVALID = "INVALID"
+    COMPLIANT = "COMPLIANT"
 
 class MappingStatus(BaseModel):
     element_guid: str
     spec_name: str
     state: MappingState
-    # Detailed Gaps for the App to resolve
     missing_requirements: List[IdsRequirement] 
     invalid_requirements: List[IdsRequirement] 
-
-class ModelMappingSummary(BaseModel):
-    """Overview for the Dashboard."""
-    spec_name: str
-    total_applicable: int
-    compliant_count: int
-    invalid_count: int
-    incomplete_count: int
-    unmapped_count: int
 ```
 
 ---
 
-## 6. Bulk Alignment DTO
-To support the "General Match" phase, the user can apply one set of rules to many elements at once.
+## 7. Operational Core: `IfcStore`
 
-```Python
-class BulkSpecificationManifest(BaseModel):
-    """Apply a single set of resolved values to a massive selection."""
-    element_guids: List[str]
-    specification_name: str
-    requirements: List[ConcreteRequirement]
-```
+The `IfcStore` remains the primary integration point, orchestrating services:
 
----
-
-## 7. The "Enrichment" Workflow Methods
-
-The `IfcStore` exposes these API alignment integrations natively:
-
-| **Method**                     | **Input**                   | **Returns**                    | **Implementation Detail**                                                 |
-| ------------------------------ | --------------------------- | ------------------------------ | ------------------------------------------------------------------------- |
-| **`check_mapping_status()`**   | `ids_store`                 | `List[MappingStatus]`          | **Core Logic:** Compares every element against every applicable IDS Spec. |
-| **`get_mapping_summary()`**    | `ids_store`                 | `List[ModelMappingSummary]`    | Aggregates data for the high-level project overview.                      |
-| **`apply_bulk_manifest()`**    | `BulkSpecificationManifest` | `List[ModificationResult]`     | Efficiently writes the same data to multiple Express IDs.                 |
+| **Method Category**    | **Implementation Strategy**                                                                 |
+| ---------------------- | ------------------------------------------------------------------------------------------- |
+| **Discovery**          | Delegates to `DiscoveryAggregator` for cached tree lookups.                                |
+| **Querying**           | Uses `QueryEngine` to evaluate `ComplexQuery` trees against `ifcopenshell` selectors.      |
+| **Analysis**           | Intersects common overlaps explicitly resolving edge `<Mixed>` property occurrences.       |
+| **Groups**             | Injected with an `AbstractGroupRepository` to handle logical element sets.                  |
+| **Enrichment/Writing** | Uses `ManifestWriter` to apply `SpecificationManifest` contracts with material pooling.     |
 
 ---
 
-## 8. Updated Query Engine: "Status Filtering"
+## 8. Architectural Guardrails
 
-The **Query Engine** (`ComplexQuery`) must now support a new category: `MappingStatus`.
-
-- **Filter Category:** `MappingStatus`
-    
-- **Property Name:** `status` or `spec_name`
-    
-- **Value:** `UNMAPPED`, `INCOMPLETE`, `INVALID`, `COMPLIANT`.
-    
-- **Use Case:** User queries `(Category == "IfcWall") AND (MappingStatus == "INCOMPLETE")` to find elements needing granular data.
-    
-
----
-
-## 9. Architectural Guardrails (Mapping Edition)
-
-1. **On-the-Fly Analysis:** Mapping status should be calculated dynamically by comparing the IFC model to the IDS store. Do not rely on hardcoded "Status" properties in the IFC file, as they can become out of sync. The current implementation may keep store-local results for repeated lookups within the same `IfcStore` instance, but that is an internal optimization and not part of the public contract.
-
-2. **Entity Type Modification (UNMAPPED):** Handled transparently by the `ManifestWriter` when `type == "Entity"` permitting direct mutations (via `root.reassign_class`) mapping elements like `IfcBuildingElementProxy` automatically mid-manifest.
-
-3. **Material Linking:** Both creating new materials and linking them should be supported. Assume the model does not have the right material yet; proactively append it to the document's global `IfcMaterial` library during assignment.
-
-4. **The "Invalid/Incomplete" Logic:** An element is `INCOMPLETE` if required properties exist without values. It is `INVALID` if the current value is not among the `options` (enumerations) allowed by the IDS.
+1. **Protocol-First**: All data changes must originate in `ifc_core.models`.
+2. **Stateless Logic**: Services should not hold state beyond internal performance caches; they must operate on the passed `ifcopenshell.file`.
+3. **Deterministic Mapping**: Mapping status must be calculated on-the-fly to ensure it always reflects the current model state.

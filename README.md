@@ -78,25 +78,29 @@ ifc.save("Building_Updated.ifc")
 ## 🏗️ Project Structure
 ```text
 src/ifc_core/
-├── ifc_store.py       # IFC Entry Point (IfcStore)
-├── ids_store.py       # IDS Entry Point (IdsStore)
-├── models/            # Pydantic Data Schemas
-│   ├── ifc.py         # IFC Metadata & Results
-│   └── ids.py         # IDS Specs, Requirements & Manifests
-└── services/          # Core Logic Providers
-    ├── metadata.py    # IFC Header Parsing
-    ├── writer.py      # IFC Model Modification (API based)
-    ├── ids_reader.py  # IDS XML & Restriction Parsing
-    ├── validator.py   # Gap analysis and mapping validation
-    ├── discovery.py   # Read-only spatial topology extractions 
-    ├── inspector.py   # Core analytics intersecting common element selections
-    └── query.py       # Native Execution Query Engine solving logic schemas
+├── [ifc_store.py](src/ifc_core/ifc_store.py)       # IFC Entry Point (IfcStore)
+├── [ids_store.py](src/ifc_core/ids_store.py)       # IDS Entry Point (IdsStore)
+├── [models/](src/ifc_core/models/)            # Pydantic Data Schemas
+│   ├── [ifc.py](src/ifc_core/models/ifc.py)         # IFC Metadata & Results
+│   └── [ids.py](src/ifc_core/models/ids.py)         # IDS Specs, Requirements & Manifests
+└── [services/](src/ifc_core/services/)          # Core Logic Providers
+    ├── [metadata.py](src/ifc_core/services/metadata.py)    # IFC Header Parsing
+    ├── [writer.py](src/ifc_core/services/writer.py)      # IFC Model Modification (API based)
+    ├── [ids_reader.py](src/ifc_core/services/ids_reader.py)  # IDS XML & Restriction Parsing
+    ├── [validator.py](src/ifc_core/services/validator.py)   # Gap analysis and mapping validation
+    ├── [discovery/](src/ifc_core/services/discovery/)     # Granular spatial/pset/class discovery aggregator
+    ├── [inspector.py](src/ifc_core/services/inspector.py)   # Core analytics intersecting common element selections
+    └── [query.py](src/ifc_core/services/query.py)       # Native Execution Query Engine solving logic schemas
+
+---
+**Detailed Design**: See [TECHNICAL_DESIGN.md](TECHNICAL_DESIGN.md) for class diagrams and service architecture.
 ```
 
 ## 🏗️ Key Capabilities
 - **State Engine:** Automatically evaluates the `MappingState` (`COMPLIANT`, `UNMAPPED`, `INCOMPLETE`, `INVALID`) across elements. The current implementation keeps store-local mapping lookup results for repeated queries within the same store instance.
 - **Bulk Operations Optimizations:** The internal `ManifestWriter` handles high-frequency assignments resolving complex schemas across thousands of geometries quickly using material memory pooling.
-- **Discovery Read-APIs:** Drives internal views executing dynamic tree traversals cleanly (creating Virtual Nodes for IFC Classes).
+- **Discovery Aggregator:** Drives internal views executing dynamic tree traversals cleanly (creating Virtual Nodes for IFC Classes) across spatial, classification, and material domains.
+- **Group Management:** Supports logical element grouping stored in sidecar JSON files, decoupled via `AbstractGroupRepository`.
 - **Execution Query System:** Exposes a powerful nested parsing solution tracking objects specifically matching `Material`, `PSet` existence, checking dynamic `MappingStatus`, and recursive algorithms solving logic constraints natively.
 - **Ambiguity Management:** Extracts `xs:enumeration` and range restrictions from IDS for UI generation.
 - **Contract-Based Writing:** Uses `SpecificationManifest` to ensure the App resolves all choices before the package touches the IFC.
@@ -118,6 +122,9 @@ src/ifc_core/
 | `execute_query(query, ids_store=None)` | `ComplexQuery`, `IdsStore \| None` | `List[str]` | Recursive GUID filtering engine. |
 | `apply_specification(manifest)` | `SpecificationManifest` | `List[ModificationResult]` | Applies resolved requirements to one element. |
 | `apply_bulk_manifest(manifest)` | `BulkSpecificationManifest` | `List[ModificationResult]` | Applies resolved requirements to many elements. |
+| `get_groups()` | - | `List[BimGroupSummary]` | List of all logical element groups. |
+| `get_group(name)` | `str` | `BimGroup \| None` | Fetch specific group with its GUIDs. |
+| `save_group(group)` | `BimGroup` | `bool` | Persist an element group. |
 | `check_mapping_status(ids_store)` | `IdsStore` | `List[MappingStatus]` | Per-element IDS compliance states. |
 | `get_mapping_summary(ids_store)` | `IdsStore` | `List[ModelMappingSummary]` | Dashboard-level compliance counters. |
 
