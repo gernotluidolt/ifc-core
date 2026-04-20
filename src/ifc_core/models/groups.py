@@ -14,3 +14,4 @@ class BimGroupSummary(BaseModel):
 
     name: str
     count: int
+    specification: str | None = None
