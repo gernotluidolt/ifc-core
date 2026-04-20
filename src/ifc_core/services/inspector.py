@@ -30,12 +30,6 @@ def analyze_guids(model: ifcopenshell.file, guids: list[str]) -> SelectionAnalys
     unique_types = sorted(list(set(types)))
     if len(unique_types) == 1:
         common_attributes["Entity"] = SharedValue(value=unique_types[0], is_mixed=False)
-    else:
-        common_attributes["Entity"] = SharedValue(
-            value="<Mixed>", 
-            is_mixed=True, 
-            other_values=unique_types
-        )
 
     # 2. Whitelisted Core Attributes
     whitelist = ["Name", "ObjectType"]
@@ -49,13 +43,7 @@ def analyze_guids(model: ifcopenshell.file, guids: list[str]) -> SelectionAnalys
         unique_vals = list(set([str(v) if v is not None else "" for v in vals]))
         is_mixed = len(unique_vals) > 1
 
-        if is_mixed:
-            common_attributes[attr] = SharedValue(
-                value="<Mixed>", 
-                is_mixed=True, 
-                other_values=unique_vals
-            )
-        else:
+        if not is_mixed:
             common_attributes[attr] = SharedValue(value=val1, is_mixed=False)
 
     # Intersect Psets
