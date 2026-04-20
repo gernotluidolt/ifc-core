@@ -8,8 +8,22 @@ from ..models.ifc import MappingState, MappingStatus
 
 def _get_property_value(element, pset_name: str, prop_name: str) -> Any:
     psets = ifcopenshell.util.element.get_psets(element)
-    if pset_name in psets and prop_name in psets[pset_name]:
-        return psets[pset_name][prop_name]
+    
+    # Case-insensitive Pset lookup
+    target_pset_key = pset_name.lower()
+    found_pset = None
+    for k in psets.keys():
+        if k.lower() == target_pset_key:
+            found_pset = psets[k]
+            break
+    
+    if found_pset is not None:
+        # Case-insensitive Property lookup
+        target_prop_key = prop_name.lower()
+        for k in found_pset.keys():
+            if k.lower() == target_prop_key:
+                return found_pset[k]
+                
     return None
 
 
@@ -31,9 +45,24 @@ def _check_value_against_options(value: Any, req: IdsRequirement) -> bool:
 
     val_str = str(value)
 
+    # 1. Direct explicit options
     if req.options and val_str not in req.options:
         return False
 
+    # 2. Extract options dumped into value string by ifctester (e.g. "{'enumeration': ['...']}")
+    if req.value and isinstance(req.value, str):
+        if "'enumeration':" in req.value:
+            import re
+            match = re.search(r"'enumeration':\s*\[(.*?)\]", req.value)
+            if match:
+                # 'A', 'B' -> split and strip
+                raw_opts = match.group(1).split(",")
+                parsed_opts = [opt.strip().strip("'").strip('"') for opt in raw_opts]
+                if val_str not in parsed_opts:
+                    return False
+                return True # Passed enumeration! No need to strict match the dump string.
+
+    # 3. Numeric bounds
     try:
         val_float = float(value)
         if req.min_inclusive is not None and val_float < req.min_inclusive:
@@ -41,11 +70,12 @@ def _check_value_against_options(value: Any, req: IdsRequirement) -> bool:
         if req.max_inclusive is not None and val_float > req.max_inclusive:
             return False
     except ValueError:
-        # Not a float, skip range checks
         pass
 
-    if req.value and val_str != str(req.value):
-        return False
+    # 4. Strict exact match for singular literal string requirements
+    if req.value and not "'enumeration':" in str(req.value):
+        if val_str != str(req.value):
+            return False
 
     return True
 
