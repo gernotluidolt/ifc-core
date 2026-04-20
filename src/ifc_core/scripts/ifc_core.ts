@@ -145,6 +145,7 @@ export interface PSetSummary {
 export interface SelectionAnalysis {
   common_attributes: { [key: string]: SharedValue };
   common_psets: { [key: string]: { [key: string]: SharedValue } };
+  common_classifications: { [key: string]: SharedValue };
 }
 
 export interface SharedValue {
@@ -183,4 +184,5 @@ export interface BimGroup {
 export interface BimGroupSummary {
   name: string;
   count: number;
+  specification: any;
 }

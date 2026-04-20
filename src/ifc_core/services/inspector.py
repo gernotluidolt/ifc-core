@@ -1,6 +1,7 @@
 
 import ifcopenshell
 import ifcopenshell.util.element
+import ifcopenshell.util.classification
 from typing import Any
 
 from ..models.ifc import SelectionAnalysis, SharedValue
@@ -79,8 +80,48 @@ def analyze_guids(model: ifcopenshell.file, guids: list[str]) -> SelectionAnalys
             else:
                 common_psets[pset_name][prop] = SharedValue(value=val1, is_mixed=False)
 
+    # Intersect Classifications
+    all_classifications_data = []
+    for e in elements:
+        refs = ifcopenshell.util.classification.get_references(e)
+        element_map = {}
+        for ref in refs:
+            system = ifcopenshell.util.classification.get_classification(ref)
+            system_name = system.Name if system else "Unknown"
+            # In IfcOpenShell, identification is usually stored in Identification (IFC4) or ItemReference (IFC2x3)
+            code = getattr(ref, "Identification", getattr(ref, "ItemReference", None))
+            element_map[system_name] = code
+        all_classifications_data.append(element_map)
+
+    # Find system names present in ALL elements
+    if not all_classifications_data:
+        common_systems = set()
+    else:
+        common_systems = set(all_classifications_data[0].keys())
+        for element_map in all_classifications_data[1:]:
+            common_systems.intersection_update(element_map.keys())
+
+    common_classifications = {}
+    for system_name in common_systems:
+        # Check if the code for this system is consistent
+        codes = [element_map[system_name] for element_map in all_classifications_data]
+        val1 = codes[0]
+        unique_codes = list(set(codes))
+        is_mixed = len(unique_codes) > 1
+
+        if is_mixed:
+            common_classifications[system_name] = SharedValue(
+                value="<Mixed>",
+                is_mixed=True,
+                other_values=[str(c) for c in unique_codes]
+            )
+        else:
+            common_classifications[system_name] = SharedValue(value=str(val1), is_mixed=False)
+
     return SelectionAnalysis(
-        common_attributes=common_attributes, common_psets=common_psets
+        common_attributes=common_attributes,
+        common_psets=common_psets,
+        common_classifications=common_classifications,
     )
 
 
