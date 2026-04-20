@@ -22,29 +22,41 @@ def analyze_guids(model: ifcopenshell.file, guids: list[str]) -> SelectionAnalys
     if not elements:
         return SelectionAnalysis(common_attributes={}, common_psets={})
 
-    # Intersect attributes
-    infos = [e.get_info() for e in elements]
-
-    common_attr_keys = set(infos[0].keys())
-    for info in infos[1:]:
-        common_attr_keys.intersection_update(info.keys())
-
+    # Intersect attributes (Restricted to Whitelist + Entity Type)
     common_attributes = {}
-    for key in common_attr_keys:
-        if key in ("id", "type", "GlobalId"):
+    
+    # 1. Entity Type (is_a)
+    types = [e.is_a() for e in elements]
+    unique_types = sorted(list(set(types)))
+    if len(unique_types) == 1:
+        common_attributes["Entity"] = SharedValue(value=unique_types[0], is_mixed=False)
+    else:
+        common_attributes["Entity"] = SharedValue(
+            value="<Mixed>", 
+            is_mixed=True, 
+            other_values=unique_types
+        )
+
+    # 2. Whitelisted Core Attributes
+    whitelist = ["Name", "ObjectType"]
+    for attr in whitelist:
+        # Only include if EVERY element possesses this attribute
+        if not all(hasattr(e, attr) for e in elements):
             continue
-        val1 = infos[0][key]
-        all_vals = [info[key] for info in infos]
-        is_mixed = any(v != val1 for v in all_vals[1:])
+            
+        vals = [getattr(e, attr, None) for e in elements]
+        val1 = vals[0]
+        unique_vals = list(set([str(v) if v is not None else "" for v in vals]))
+        is_mixed = len(unique_vals) > 1
 
         if is_mixed:
-            common_attributes[key] = SharedValue(
+            common_attributes[attr] = SharedValue(
                 value="<Mixed>", 
                 is_mixed=True, 
-                other_values=list(set(all_vals))
+                other_values=unique_vals
             )
         else:
-            common_attributes[key] = SharedValue(value=val1, is_mixed=False)
+            common_attributes[attr] = SharedValue(value=val1, is_mixed=False)
 
     # Intersect Psets
     all_psets = [ifcopenshell.util.element.get_psets(e) for e in elements]
