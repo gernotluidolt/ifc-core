@@ -12,14 +12,14 @@ from pydantic import BaseModel, Field
 from typing import List, Optional, Any, Union, Dict
 
 class ModelMetadata(BaseModel):
-    filename: str
-    ifc_version: str
-    site_count: int
-    story_count: int
+    schema_version: str
     author: str
+    timestamp: str
+    file_name: str | None = None
+    has_multilayered_elements: bool = False
 
 class SpatialNode(BaseModel):
-    """Recursive node for spatial hierarchy. children=None indicates lazy-loading required."""
+    """Recursive node for spatial hierarchy."""
     guid: str
     name: str
     type: str  # IfcSite, IfcBuilding, IfcBuildingStorey
@@ -32,8 +32,9 @@ class CountedItem(BaseModel):
     element_count: int
 
 class PSetSummary(CountedItem):
-    """A map of what PSets exist and which parameters they contain."""
-    parameters: List[str]
+    """Property set summary with parameter names."""
+    parameters: List[str] = []
+    children: List["PSetSummary"] = []
 ```
 
 ---
@@ -83,7 +84,8 @@ Provides the logic to "intersect" data across many elements to find commonalitie
 ```Python
 class SharedValue(BaseModel):
     value: Any
-    is_mixed: bool = False # True if the selected GUIDs have different values for this key
+    is_mixed: bool = False
+    other_values: List[Any] = []
 
 class SelectionAnalysis(BaseModel):
     common_attributes: Dict[str, SharedValue]
