@@ -1,8 +1,7 @@
 [project]
 name = "ifc-core"
 version = "0.1.0"
-description = "Add your description here"
-readme = "README.md"
+description = "Engine for IFC-based backend services, providing a structured, type-safe interface for querying, analyzing, and manipulating BIM data (IFC) and Information Delivery Specifications (IDS) using Pydantic models, with the goal to enrich IFC with the required specifications defined in an IDS file."
 authors = [
     { name = "Gernot Luidolt", email = "gernot@luido.lt" }
 ]
