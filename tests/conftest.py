@@ -1,8 +1,9 @@
-import pytest
-from pathlib import Path
 import shutil
+from pathlib import Path
 
-from ifc_core import IfcStore, IdsStore
+import pytest
+
+from ifc_core import IdsStore, IfcStore
 
 
 @pytest.fixture(scope="session")

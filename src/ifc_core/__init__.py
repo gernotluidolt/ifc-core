@@ -1,13 +1,13 @@
 # src/ifc_core/__init__.py
-from .ifc_store import IfcStore
 from .ids_store import IdsStore
-from .models.ifc import ModelMetadata, ModificationResult
+from .ifc_store import IfcStore
 from .models.ids import (
-    IdsSpecification,
-    IdsRequirement,
-    SpecificationManifest,
     ConcreteRequirement,
+    IdsRequirement,
+    IdsSpecification,
+    SpecificationManifest,
 )
+from .models.ifc import ModelMetadata, ModificationResult
 
 __all__ = [
     "IfcStore",

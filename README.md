@@ -1,8 +1,16 @@
 # IFC-Core
 
-A high-level, Pythonic wrapper for `IfcOpenShell` and `Ifctester`. This library provides a structured, type-safe interface for interacting with BIM data (IFC) and Information Delivery Specifications (IDS) using Pydantic models.
+**IFC-Core** is a Pythonic wrapper for `IfcOpenShell` and `Ifctester`, engineered to be the core engine behind any IFC-based backend service. It provides a structured, type-safe interface for querying, analyzing, and manipulating BIM data (IFC) and Information Delivery Specifications (IDS) using Pydantic models, with the goal to enrich IFC with the required specifications defined in an IDS file.
 
-## 🚀 Quick Start
+## Backend-First Architecture
+
+This library is explicitly designed as a **stateless data engine** to be integrated into server-side applications (e.g., FastAPI, Flask) that serve a separate frontend.
+
+- **Headless & Decoupled:** No UI dependencies. Use it to build APIs that drive your own custom BIM tools.
+- **Protocol-First:** All communication is handled via Pydantic DTOs, making it easy to sync with frontend TypeScript types or JSON-based REST APIs.
+- **Query & Manipulate:** A powerful recursive query engine for filtering GUIDs and a manifest-based writer for safe IFC modifications.
+
+## Quick Start
 
 ### Prerequisites
 - [uv](https://github.com/astral-sh/uv) installed.
@@ -15,12 +23,21 @@ cd ifc-core
 uv sync
 ```
 
-## 🛠️ Usage Workflow
+## Usage Workflow
 
 The project is designed for a **Decoupled Workflow**: The package identifies requirements and handles the IFC database, while your App handles user decisions and ambiguity resolution.
 
 ### 1. Inspecting Requirements (`IdsStore`)
 Load an IDS file to see what data is required. The package automatically extracts restrictions like enumerations (options) or ranges.
+
+## Frontend Integration
+
+IFC-Core is designed to work in tandem with modern frontend frameworks (Svelte, React, Vue).
+
+1.  **Backend:** Wrap `IfcStore` in an API (e.g., FastAPI).
+2.  **Protocol:** Use the provided Pydantic models to define your API response schemas.
+3.  **Frontend:** Generate TypeScript types from the models to ensure end-to-end type safety.
+4.  **Interaction:** The frontend gathers user input (e.g., property values) and sends a `SpecificationManifest` back to the backend to be applied to the IFC model.
 
 ```python
 from ifc_core import IdsStore
@@ -75,86 +92,91 @@ for res in results:
 ifc.save("Building_Updated.ifc")
 ```
 
-## 🏗️ Project Structure
+## Project Structure
 ```text
 src/ifc_core/
-├── ifc_store.py       # IFC Entry Point (IfcStore)
-├── ids_store.py       # IDS Entry Point (IdsStore)
-├── models/            # Pydantic Data Schemas
-│   ├── ifc.py         # IFC Metadata & Results
-│   └── ids.py         # IDS Specs, Requirements & Manifests
-└── services/          # Core Logic Providers
-    ├── metadata.py    # IFC Header Parsing
-    ├── writer.py      # IFC Model Modification (API based)
-    ├── ids_reader.py  # IDS XML & Restriction Parsing
-    ├── validator.py   # Gap analysis and mapping validation
-    ├── discovery.py   # Read-only spatial topology extractions 
-    ├── inspector.py   # Core analytics intersecting common element selections
-    └── query.py       # Native Execution Query Engine solving logic schemas
+├── [ifc_store.py](src/ifc_core/ifc_store.py)       # IFC Entry Point (IfcStore)
+├── [ids_store.py](src/ifc_core/ids_store.py)       # IDS Entry Point (IdsStore)
+├── [models/](src/ifc_core/models/)            # Pydantic Data Schemas
+│   ├── [ifc.py](src/ifc_core/models/ifc.py)         # IFC Metadata & Results
+│   ├── [ids.py](src/ifc_core/models/ids.py)         # IDS Specs & Manifests
+│   └── [groups.py](src/ifc_core/models/groups.py)   # Element Group Schemas
+├── [services/](src/ifc_core/services/)          # Core Logic Providers
+│   ├── [discovery/](src/ifc_core/services/discovery/) # Tree discovery (Spatial, Class, Material)
+│   ├── [groups/](src/ifc_core/services/groups/)     # Group persistence repositories
+│   ├── [writer.py](src/ifc_core/services/writer.py)      # IFC Model Modification
+│   ├── [query.py](src/ifc_core/services/query.py)       # Recursive GUID Query Engine
+│   └── [validator.py](src/ifc_core/services/validator.py)   # IDS Mapping Validation
+└── [scripts/](src/ifc_core/scripts/)           # Tooling
+    └── [generate_types.py](src/ifc_core/scripts/generate_types.py) # TS Type Generator
 ```
 
-## 🏗️ Key Capabilities
-- **State Engine:** Automatically evaluates the `MappingState` (`COMPLIANT`, `UNMAPPED`, `INCOMPLETE`, `INVALID`) across elements. The current implementation keeps store-local mapping lookup results for repeated queries within the same store instance.
-- **Bulk Operations Optimizations:** The internal `ManifestWriter` handles high-frequency assignments resolving complex schemas across thousands of geometries quickly using material memory pooling.
-- **Discovery Read-APIs:** Drives internal views executing dynamic tree traversals cleanly (creating Virtual Nodes for IFC Classes).
-- **Execution Query System:** Exposes a powerful nested parsing solution tracking objects specifically matching `Material`, `PSet` existence, checking dynamic `MappingStatus`, and recursive algorithms solving logic constraints natively.
-- **Ambiguity Management:** Extracts `xs:enumeration` and range restrictions from IDS for UI generation.
-- **Contract-Based Writing:** Uses `SpecificationManifest` to ensure the App resolves all choices before the package touches the IFC.
-- **Full IDS 1.0 Support:** Handles Properties, Attributes, Materials, and Classifications.
-- **Safe Modifications:** Built on top of the official `ifcopenshell.api` to ensure internal IFC data consistency.
+## Key Capabilities
+- **State Engine:** Automatically evaluates the `MappingState` (`COMPLIANT`, `UNMAPPED`, `INCOMPLETE`, `INVALID`) across elements.
+- **Bulk Operations:** Internal `ManifestWriter` handles high-frequency assignments across thousands of elements using material memory pooling.
+- **Deep Discovery:** Unified tree traversals for Spatial Hierarchy, Classification Systems, and Material Associations.
+- **Layered Materials:** Specialized support for multi-layered element analysis.
+- **Group Management:** Logical element grouping decoupled via `AbstractGroupRepository`.
+- **Recursive Query System:** Powerful nested filtering (AND/OR/NOT) for GUIDs based on Attributes, PSets, Materials, or Mapping Status.
+- **Frontend Sync:** Includes a script to generate TypeScript interfaces directly from Pydantic DTOs for end-to-end type safety.
 
-## 📘 Public API Contract
+## Public API Contract
 
 ### IfcStore Endpoints
 
 | Method | Input | Returns | Purpose |
 | --- | --- | --- | --- |
 | `info` | - | `ModelMetadata` | File-level schema and author metadata. |
-| `save(target_path=None)` | `Path \| None` | `None` | Persists model changes and clears caches. |
-| `get_spatial_tree(parent_guid=None)` | `str \| None` | `List[SpatialNode]` | Spatial hierarchy for tree UIs. |
-| `get_psets()` | - | `List[PSetSummary]` | Property set inventory with parameter names. |
-| `get_materials()` | - | `List[CountedItem]` | Material inventory with usage counts. |
-| `analyze_guids(guids)` | `List[str]` | `SelectionAnalysis` | Common and mixed values across selection. |
-| `execute_query(query, ids_store=None)` | `ComplexQuery`, `IdsStore \| None` | `List[str]` | Recursive GUID filtering engine. |
-| `apply_specification(manifest)` | `SpecificationManifest` | `List[ModificationResult]` | Applies resolved requirements to one element. |
-| `apply_bulk_manifest(manifest)` | `BulkSpecificationManifest` | `List[ModificationResult]` | Applies resolved requirements to many elements. |
-| `check_mapping_status(ids_store)` | `IdsStore` | `List[MappingStatus]` | Per-element IDS compliance states. |
-| `get_mapping_summary(ids_store)` | `IdsStore` | `List[ModelMappingSummary]` | Dashboard-level compliance counters. |
+| `save(path=None)` | `Path \| None` | `None` | Persists model changes and clears caches. |
+| `get_spatial_tree(guid)`| `str \| None` | `List[SpatialNode]` | Spatial hierarchy for tree UIs. |
+| `get_classification_tree()`| - | `ClassificationTree` | Full classification tree traversal. |
+| `get_psets()` | - | `List[PSetSummary]` | Property set inventory with parameters. |
+| `get_materials()` | - | `List[CountedItem]` | Material usage counts. |
+| `get_layered_materials()`| - | `LayeredMaterialsSummary`| Multi-layered material analysis. |
+| `get_entity_counts()` | - | `List[CountedItem]` | Count of IfcProduct entities by type. |
+| `analyze_guids(guids)` | `List[str]` | `SelectionAnalysis` | Intersect values across selection. |
+| `execute_query(q, ids)` | `ComplexQuery, ...` | `List[str]` | GUID filtering engine. |
+| `apply_specification(m)`| `SpecManifest` | `List[ModResult]` | Apply resolved values to an element. |
+| `apply_bulk_manifest(m)`| `BulkManifest` | `List[ModResult]` | Apply resolved values to many elements. |
+| `check_mapping_status(ids)`| `IdsStore` | `List[MappingStatus]`| Per-element IDS compliance states. |
+| `bind_groups(repo)` | `AbstractGroupRepo`| `None` | Inject group persistence backend. |
+
+### Group Management (`store.groups`)
+*Requires binding a repository first via `bind_groups()`.*
+
+| Method | Input | Returns | Purpose |
+| --- | --- | --- | --- |
+| `get_all()` | - | `List[BimGroupSummary]`| List all available groups. |
+| `get_group(name)` | `str` | `BimGroup \| None` | Fetch specific group GUIDs. |
+| `save_group(group)` | `BimGroup` | `bool` | Persist an element group. |
+| `delete_group(name)`| `str` | `bool` | Remove a group from storage. |
 
 ### IdsStore Endpoints
 
 | Method | Input | Returns | Purpose |
 | --- | --- | --- | --- |
 | `specifications` | - | `List[IdsSpecification]` | All specifications parsed from IDS file. |
-| `get_spec_by_name(name)` | `str` | `IdsSpecification \| None` | Fast lookup by specification name. |
+| `get_spec_by_name(name)` | `str` | `IdsSpecification \| None` | Lookup by specification name. |
 
 ### Public DTOs
 
 | DTO | Role |
 | --- | --- |
-| `IdsRequirement` | Parsed IDS facet for applicability and requirements. |
-| `IdsSpecification` | One IDS specification with applicability and requirements. |
-| `ConcreteRequirement` | App-resolved value assignment unit. |
-| `SpecificationManifest` | Single-element write contract for `apply_specification`. |
-| `ModelMetadata` | IFC metadata snapshot exposed by `info`. |
-| `ModificationResult` | Result object for write operations. |
-| `MappingState` | Enum for `UNMAPPED`, `INCOMPLETE`, `INVALID`, `COMPLIANT`. |
-| `MappingStatus` | Per element/spec mapping evaluation result. |
-| `ModelMappingSummary` | Aggregated mapping counts per spec. |
-| `BulkSpecificationManifest` | Multi-element write contract for bulk application. |
-| `SpatialNode` | Recursive tree node for discovery views. |
-| `CountedItem` | Generic name/count structure. |
-| `PSetSummary` | Property set summary with parameter names. |
-| `ComparisonOperator` | Operator enum for query filters. |
-| `FilterCriterion` | Atomic filter expression in a query tree. |
-| `ComplexQuery` | Recursive AND/OR/NOT query contract. |
-| `SharedValue` | Shared-or-mixed marker for inspected values. |
-| `SelectionAnalysis` | Common attributes/psets across selected GUIDs. |
+| `SpecificationManifest` | Write contract for a single element. |
+| `BulkSpecificationManifest` | Write contract for multiple elements. |
+| `MappingStatus` | Evaluation result for one element/spec. |
+| `ModelMappingSummary` | Dashboard-level counters per specification. |
+| `SpatialNode` | Recursive node for spatial hierarchies. |
+| `ClassificationTree` | Wrapper for hierarchical classification data. |
+| `LayeredMaterialsSummary` | Container for multi-layered element counts. |
+| `SelectionAnalysis` | Intersected values (mixed vs common) for GUIDs. |
+| `BimGroup` | Metadata and GUID list for a logical group. |
+| `ComplexQuery` | Boolean logic tree for GUID filtering. |
 
-## 🧪 Tests
+## Tests
 The test suite is centered on the public package contract: real IDS parsing, IFC discovery, query execution, and manifest application. It intentionally avoids relying on fake IDS facets or private helper behavior.
 
-## 🧪 Development
+## Development
 ```powershell
 # Lint and auto-fix (F401, F841, etc.)
 uv run ruff check --fix

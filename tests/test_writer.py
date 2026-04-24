@@ -1,5 +1,5 @@
-from ifc_core.models.ifc import BulkSpecificationManifest
 from ifc_core.models.ids import ConcreteRequirement
+from ifc_core.models.ifc import BulkSpecificationManifest
 
 
 def test_entity_swapping(mock_ifc_store):

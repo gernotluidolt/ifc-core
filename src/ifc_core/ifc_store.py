@@ -1,47 +1,66 @@
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any
+
 import ifcopenshell
 
 from ifc_core.models.ids import SpecificationManifest
-from ifc_core.services.writer import apply_manifest_to_element, ManifestWriter
+from ifc_core.services.writer import ManifestWriter, apply_manifest_to_element
+
+from .ids_store import IdsStore
 from .models.ifc import (
-    ModelMetadata,
-    ModificationResult,
+    BulkSpecificationManifest,
+    ClassificationTree,
+    ComplexQuery,
+    CountedItem,
+    LayeredMaterialsSummary,
+    MappingState,
     MappingStatus,
     ModelMappingSummary,
-    BulkSpecificationManifest,
-    MappingState,
-    SpatialNode,
-    CountedItem,
+    ModelMetadata,
+    ModificationResult,
     PSetSummary,
     SelectionAnalysis,
-    ComplexQuery,
+    SpatialNode,
 )
-from .services.metadata import get_model_info
-from .services.validator import check_mapping_status as validate_mapping_status
-from .services.discovery import get_spatial_tree, get_psets, get_materials
+from .services.discovery import DiscoveryAggregator
+from .services.groups.base import AbstractGroupRepository
 from .services.inspector import analyze_guids
+from .services.metadata import get_model_info
 from .services.query import QueryEngine
-from .ids_store import IdsStore
+from .services.validator import check_mapping_status as validate_mapping_status
 
 
 class IfcStore:
     """Primary public endpoint for IFC read, query, analysis, and write workflows."""
 
-    def __init__(self, path: Path):
-        """Load an IFC file and initialize store-local caches.
+    def __init__(self, path: Path | None = None, model: Any = None):
+        """Initialize store from an IFC file path or an existing in-memory model.
 
         Args:
-            path: Path to an existing .ifc file.
+            path: Path to an existing .ifc file. Required if model is None.
+            model: An optional existing ifcopenshell model instance.
 
         Raises:
-            FileNotFoundError: If the IFC file does not exist.
+            ValueError: If neither path nor model is provided.
+            FileNotFoundError: If path is provided but does not exist.
         """
-        self.path = Path(path)
-        if not self.path.exists():
-            raise FileNotFoundError(f"No IFC file at {path}")
-        self._model = ifcopenshell.open(str(self.path))
-        self._mapping_cache: Dict[str, MappingStatus] = {}
+        if model is not None:
+            self._model = model
+            self.path = Path(path) if path else None
+        elif path:
+            self.path = Path(path)
+            if not self.path.exists():
+                raise FileNotFoundError(f"No IFC file at {path}")
+            self._model = ifcopenshell.open(str(self.path))
+        else:
+            raise ValueError("Either 'path' or 'model' must be provided to IfcStore")
+        self._mapping_cache: dict[str, MappingStatus] = {}
+        self.groups: AbstractGroupRepository | None = None
+        self._discovery = DiscoveryAggregator(self._model)
+
+    def bind_groups(self, repo: AbstractGroupRepository):
+        """Inject a grouping storage backend into the store."""
+        self.groups = repo
 
     def _clear_cache(self):
         """Invalidates the lazy cache when the model is modified."""
@@ -54,9 +73,9 @@ class IfcStore:
         Returns:
             Model metadata with schema version, author, and timestamp.
         """
-        return get_model_info(self._model)
+        return get_model_info(self._model, filename=self.path.name if self.path else None)
 
-    def save(self, target_path: Optional[Path] = None):
+    def save(self, target_path: Path | None = None):
         """Persist model changes and clear mapping caches.
 
         Args:
@@ -64,47 +83,49 @@ class IfcStore:
 
         Returns:
             None.
+
+        Raises:
+            ValueError: If neither target_path nor self.path is available.
         """
         save_to = target_path or self.path
+        if save_to is None:
+            raise ValueError("No path available to save the IFC model.")
         self._model.write(str(save_to))
         self._clear_cache()
 
     # -------------------------------------------------------------------------
-    # DISCOVERY API
+    # DISCOVERY API (Delegated to DiscoveryAggregator)
     # -------------------------------------------------------------------------
 
-    def get_spatial_tree(self, parent_guid: Optional[str] = None) -> List[SpatialNode]:
-        """Return spatial hierarchy nodes for UI tree views.
+    def get_spatial_tree(self, parent_guid: str | None = None) -> list[SpatialNode]:
+        """Return spatial hierarchy nodes for UI tree views."""
+        return self._discovery.get_spatial_tree(parent_guid)
 
-        Args:
-            parent_guid: Optional GUID to lazily fetch one hierarchy level.
+    def get_psets(self) -> list[PSetSummary]:
+        """List unique property sets with occurrence counts and parameter names."""
+        return self._discovery.get_psets()
 
-        Returns:
-            Spatial tree nodes rooted at the requested parent.
-        """
-        return get_spatial_tree(self._model, parent_guid)
+    def get_materials(self) -> list[CountedItem]:
+        """List known materials with usage counts across elements."""
+        return self._discovery.get_materials()
 
-    def get_psets(self) -> List[PSetSummary]:
-        """List unique property sets with occurrence counts and parameter names.
+    def get_entity_counts(self) -> list[CountedItem]:
+        """List IfcProduct entity types with occurrence counts."""
+        return self._discovery.get_entity_counts()
 
-        Returns:
-            Property set summaries discovered in the model.
-        """
-        return get_psets(self._model)
+    def get_classification_tree(self) -> ClassificationTree:
+        """Return full model classification tree including unclassified bucket."""
+        return self._discovery.get_classification_tree()
 
-    def get_materials(self) -> List[CountedItem]:
-        """List known materials with usage counts across elements.
-
-        Returns:
-            Materials discovered in the model, with element counts.
-        """
-        return get_materials(self._model)
+    def get_layered_materials(self) -> LayeredMaterialsSummary:
+        """Return layered material aggregates."""
+        return self._discovery.get_layered_materials()
 
     # -------------------------------------------------------------------------
     # QUERY & INSPECTION ENGINE
     # -------------------------------------------------------------------------
 
-    def analyze_guids(self, guids: List[str]) -> SelectionAnalysis:
+    def analyze_guids(self, guids: list[str]) -> SelectionAnalysis:
         """Compute shared attributes and PSets for the given element GUIDs.
 
         Mixed values are represented through SharedValue.is_mixed.
@@ -118,8 +139,8 @@ class IfcStore:
         return analyze_guids(self._model, guids)
 
     def execute_query(
-        self, query: ComplexQuery, ids_store: Optional[IdsStore] = None
-    ) -> List[str]:
+        self, query: ComplexQuery, ids_store: IdsStore | None = None
+    ) -> list[str]:
         """
         Execute a recursive query tree and return matching element GUIDs.
 
@@ -141,7 +162,7 @@ class IfcStore:
 
     def apply_specification(
         self, manifest: SpecificationManifest
-    ) -> List[ModificationResult]:
+    ) -> list[ModificationResult]:
         """
         Apply one resolved specification manifest to one IFC element.
 
@@ -156,7 +177,7 @@ class IfcStore:
 
     def apply_bulk_manifest(
         self, manifest: BulkSpecificationManifest
-    ) -> List[ModificationResult]:
+    ) -> list[ModificationResult]:
         """
         Apply one resolved requirement set to many elements.
 
@@ -170,7 +191,7 @@ class IfcStore:
         writer = ManifestWriter(self._model)
         return writer.apply_bulk_manifest(manifest)
 
-    def check_mapping_status(self, ids_store: IdsStore) -> List[MappingStatus]:
+    def check_mapping_status(self, ids_store: IdsStore) -> list[MappingStatus]:
         """
         Evaluate mapping status for all IfcProduct/specification combinations.
 
@@ -185,7 +206,14 @@ class IfcStore:
         """
         states = []
         for spec in ids_store.specifications:
-            for element in self._model.by_type("IfcProduct"):
+            # Narrow search scope to the specific entity type if defined in IDS
+            entity_type = "IfcProduct"
+            for req in spec.applicability:
+                if req.type.lower() in ("entity", "ifcentity", "class"):
+                    entity_type = req.value or req.name or "IfcProduct"
+                    break
+
+            for element in self._model.by_type(entity_type):
                 guid = getattr(element, "GlobalId", None)
                 if not guid:
                     continue
@@ -200,7 +228,7 @@ class IfcStore:
                 states.append(status)
         return states
 
-    def get_mapping_summary(self, ids_store: IdsStore) -> List[ModelMappingSummary]:
+    def get_mapping_summary(self, ids_store: IdsStore) -> list[ModelMappingSummary]:
         """
         Aggregate mapping-state counters per specification.
 

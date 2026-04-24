@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import List, Optional
+
 from .models.ids import IdsSpecification
 from .services.ids_reader import parse_ids_file
 
@@ -21,10 +21,10 @@ class IdsStore:
             raise FileNotFoundError(f"IDS file not found at {path}")
 
         # Parse the specifications immediately on load
-        self._specs: List[IdsSpecification] = parse_ids_file(self.path)
+        self._specs: list[IdsSpecification] = parse_ids_file(self.path)
 
     @property
-    def specifications(self) -> List[IdsSpecification]:
+    def specifications(self) -> list[IdsSpecification]:
         """Return all parsed IDS specifications from the loaded file.
 
         Returns:
@@ -32,7 +32,7 @@ class IdsStore:
         """
         return self._specs
 
-    def get_spec_by_name(self, name: str) -> Optional[IdsSpecification]:
+    def get_spec_by_name(self, name: str) -> IdsSpecification | None:
         """Return the first specification matching name, or None if absent.
 
         Args:

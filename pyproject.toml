@@ -1,8 +1,7 @@
 [project]
 name = "ifc-core"
 version = "0.1.0"
-description = "Add your description here"
-readme = "README.md"
+description = "Engine for IFC-based backend services, providing a structured, type-safe interface for querying, analyzing, and manipulating BIM data (IFC) and Information Delivery Specifications (IDS) using Pydantic models, with the goal to enrich IFC with the required specifications defined in an IDS file."
 authors = [
     { name = "Gernot Luidolt", email = "gernot@luido.lt" }
 ]
@@ -24,3 +23,29 @@ dev = [
     "pytest-cov>=7.1.0",
     "ruff>=0.15.8",
 ]
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "UP",  # pyupgrade
+    "TID", # flake8-tidy-imports
+]
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"bpy".msg = "Use of 'bpy' matches is forbidden in the engine core. Portability first!"
+"Swietoolsky_Blender".msg = "Core engine should not depend on the Blender add-on logic."
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"

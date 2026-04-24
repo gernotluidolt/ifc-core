@@ -1,7 +1,9 @@
-from pydantic import BaseModel
-from typing import Optional, List, Dict, Union, Any
 from enum import Enum
-from .ids import IdsRequirement, ConcreteRequirement
+from typing import Any, Union
+
+from pydantic import BaseModel
+
+from .ids import ConcreteRequirement, IdsRequirement
 
 
 class ModelMetadata(BaseModel):
@@ -10,6 +12,8 @@ class ModelMetadata(BaseModel):
     schema_version: str
     author: str
     timestamp: str
+    file_name: str | None = None
+    has_multilayered_elements: bool = False
 
 
 class ModificationResult(BaseModel):
@@ -17,7 +21,7 @@ class ModificationResult(BaseModel):
 
     success: bool
     msg: str
-    express_id: Optional[int] = None
+    express_id: int | None = None
 
 
 class MappingState(str, Enum):
@@ -35,8 +39,8 @@ class MappingStatus(BaseModel):
     element_guid: str
     spec_name: str
     state: MappingState
-    missing_requirements: List[IdsRequirement] = []
-    invalid_requirements: List[IdsRequirement] = []
+    missing_requirements: list[IdsRequirement] = []
+    invalid_requirements: list[IdsRequirement] = []
 
 
 class ModelMappingSummary(BaseModel):
@@ -53,9 +57,9 @@ class ModelMappingSummary(BaseModel):
 class BulkSpecificationManifest(BaseModel):
     """Resolved write contract for applying one requirement set to many elements."""
 
-    element_guids: List[str]
+    element_guids: list[str]
     specification_name: str
-    requirements: List[ConcreteRequirement]
+    requirements: list[ConcreteRequirement]
 
 
 class SpatialNode(BaseModel):
@@ -66,7 +70,7 @@ class SpatialNode(BaseModel):
     type: str  # IfcSite, IfcBuilding, IfcBuildingStorey
     element_count: int
     has_children: bool
-    children: Optional[List["SpatialNode"]] = None
+    children: list["SpatialNode"] | None = None
 
 
 class CountedItem(BaseModel):
@@ -77,9 +81,40 @@ class CountedItem(BaseModel):
 
 
 class PSetSummary(CountedItem):
-    """Property set summary including the parameter names it exposes."""
+    """Property set summary including the parameter names it exposes and their values."""
 
-    parameters: List[str]
+    parameters: list[str] = []
+    children: list["PSetSummary"] = []
+
+
+class ClassificationNode(BaseModel):
+    """Tree node used for classification discovery responses."""
+
+    id: str
+    type: str  # system, reference, element
+    name: str
+    count: int | None = None
+    children: list["ClassificationNode"] = []
+
+
+class ClassificationTree(BaseModel):
+    """Classification discovery response payload."""
+
+    tree: list[ClassificationNode]
+    total_elements: int
+
+
+class LayeredMaterialItem(CountedItem):
+    """Layered material summary with layer count metadata."""
+
+    layer_count: int
+
+
+class LayeredMaterialsSummary(BaseModel):
+    """Layered material discovery response payload."""
+
+    materials: list[LayeredMaterialItem]
+    total_elements: int
 
 
 class ComparisonOperator(str, Enum):
@@ -96,19 +131,19 @@ class FilterCriterion(BaseModel):
     """Atomic predicate used in a ComplexQuery expression tree."""
 
     category: str  # "Attribute", "PSet", "Material", "Story", "MappingStatus"
-    name: Optional[str] = (
+    name: str | None = (
         None  # e.g., "LoadBearing". None if checking just Pset/Material existence
     )
     operator: ComparisonOperator
     value: Any
-    property_set: Optional[str] = None  # Required if category == "PSet"
+    property_set: str | None = None  # Required if category == "PSet"
 
 
 class ComplexQuery(BaseModel):
     """Recursive boolean query contract supporting AND, OR, and NOT."""
 
     logical_op: str = "AND"  # "AND", "OR", "NOT"
-    criteria: List[Union[FilterCriterion, "ComplexQuery"]]
+    criteria: list[Union[FilterCriterion, "ComplexQuery"]]
 
 
 class SharedValue(BaseModel):
@@ -118,10 +153,40 @@ class SharedValue(BaseModel):
     is_mixed: bool = (
         False  # True if the selected GUIDs have different values for this key
     )
+    other_values: list[Any] = []  # If mixed, contains the unique set of values present
 
 
 class SelectionAnalysis(BaseModel):
     """Shared values returned when inspecting multiple element GUIDs."""
 
-    common_attributes: Dict[str, SharedValue]
-    common_psets: Dict[str, Dict[str, SharedValue]]
+    common_attributes: dict[str, SharedValue]
+    common_psets: dict[str, dict[str, SharedValue]]
+    common_classifications: dict[str, SharedValue] = {}
+
+class AnchorGroup(BaseModel):
+    """A cluster of elements sharing a common anchor value."""
+
+    value: str
+    count: int
+
+
+class AnchorGroupsResponse(BaseModel):
+    """Response payload for anchor-based discovery."""
+
+    ok: bool
+    anchor_name: str
+    pivot_mode: str
+    groups: list[AnchorGroup]
+    unanchored_count: int
+    total_count: int
+    storey_guid: str | None = None
+    error: str | None = None
+
+
+class AnchorSelectResponse(BaseModel):
+    """Response payload for anchor selection actions."""
+
+    ok: bool
+    selected_count: int
+    candidate_count: int
+    error: str | None = None
