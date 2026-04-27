@@ -66,7 +66,14 @@ def analyze_guids(model: ifcopenshell.file, guids: list[str]) -> SelectionAnalys
             # Check if all elements in the selection actually have this property
             prop_vals = [psets[pset_name][prop] for psets in all_psets]
             val1 = prop_vals[0]
-            unique_vals = list(set(prop_vals))
+            # Safe unique values (handle unhashable types like dicts)
+            try:
+                unique_vals = list(set(prop_vals))
+            except TypeError:
+                unique_vals = []
+                for v in prop_vals:
+                    if v not in unique_vals:
+                        unique_vals.append(v)
             
             # It's mixed if values differ OR if not all elements share this property
             is_mixed = len(prop_vals) != len(elements) or len(unique_vals) > 1
@@ -106,7 +113,13 @@ def analyze_guids(model: ifcopenshell.file, guids: list[str]) -> SelectionAnalys
         # Check if the code for this system is consistent
         codes = [element_map[system_name] for element_map in all_classifications_data]
         val1 = codes[0]
-        unique_codes = list(set(codes))
+        try:
+            unique_codes = list(set(codes))
+        except TypeError:
+            unique_codes = []
+            for c in codes:
+                if c not in unique_codes:
+                    unique_codes.append(c)
         is_mixed = len(unique_codes) > 1
 
         if is_mixed:
