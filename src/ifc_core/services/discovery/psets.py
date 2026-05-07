@@ -11,17 +11,21 @@ def get_psets(model: ifcopenshell.file) -> list[PSetSummary]:
     )
     pset_elements: dict[str, set[str]] = defaultdict(set)
 
-    for rel in model.by_type("IfcRelDefinesByProperties"):
-        pset = rel.RelatingPropertyDefinition
-        if not pset or not pset.is_a("IfcPropertySet"):
-            continue
-
+    for pset in model.by_type("IfcPropertySet"):
         pset_name = str(getattr(pset, "Name", "") or "Unnamed")
-        related_elements = getattr(rel, "RelatedObjects", [])
-        element_guids = [getattr(e, "GlobalId", None) for e in related_elements]
-        element_guids = [g for g in element_guids if g]
         
+        # Find all elements assigned to this PSet
+        element_guids = []
+        for rel in getattr(pset, "PropertyDefinitionOf", []):
+            if rel.is_a("IfcRelDefinesByProperties"):
+                related = getattr(rel, "RelatedObjects", [])
+                element_guids.extend([getattr(e, "GlobalId", None) for e in related if getattr(e, "GlobalId", None)])
+        
+        if not element_guids:
+            continue
+            
         pset_elements[pset_name].update(element_guids)
+        el_count = len(element_guids)
 
         for prop in getattr(pset, "HasProperties", []):
             if not prop.is_a("IfcPropertySingleValue"):
@@ -36,7 +40,7 @@ def get_psets(model: ifcopenshell.file) -> list[PSetSummary]:
                 raw_val = ""
             
             # We increment by the number of elements this property set is assigned to
-            data[pset_name][prop_name][raw_val] += len(element_guids)
+            data[pset_name][prop_name][raw_val] += el_count
 
     results = []
     for pset_name, props in sorted(data.items()):

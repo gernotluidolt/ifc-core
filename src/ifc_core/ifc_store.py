@@ -65,6 +65,7 @@ class IfcStore:
     def _clear_cache(self):
         """Invalidates the lazy cache when the model is modified."""
         self._mapping_cache.clear()
+        self._discovery.clear_cache()
 
     @property
     def info(self) -> ModelMetadata:
