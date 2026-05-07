@@ -9,7 +9,7 @@ from ..models.ifc import SelectionAnalysis, SharedValue
 
 def analyze_guids(model: ifcopenshell.file, guids: list[str]) -> SelectionAnalysis:
     if not guids:
-        return SelectionAnalysis(common_attributes={}, common_psets={})
+        return SelectionAnalysis(common_attributes={}, common_psets={}, common_classifications={}, common_materials={})
 
     elements = [
         model.by_guid(g)
@@ -20,7 +20,7 @@ def analyze_guids(model: ifcopenshell.file, guids: list[str]) -> SelectionAnalys
     elements = [e for e in elements if e is not None]
 
     if not elements:
-        return SelectionAnalysis(common_attributes={}, common_psets={})
+        return SelectionAnalysis(common_attributes={}, common_psets={}, common_classifications={}, common_materials={})
 
     # Intersect attributes (Restricted to Whitelist + Entity Type)
     common_attributes = {}
@@ -95,31 +95,18 @@ def analyze_guids(model: ifcopenshell.file, guids: list[str]) -> SelectionAnalys
         for ref in refs:
             system = ifcopenshell.util.classification.get_classification(ref)
             system_name = system.Name if system else "Unknown"
-            # In IfcOpenShell, identification is usually stored in Identification (IFC4) or ItemReference (IFC2x3)
             code = getattr(ref, "Identification", getattr(ref, "ItemReference", None))
             element_map[system_name] = code
         all_classifications_data.append(element_map)
 
-    # Find system names present in ALL elements
-    if not all_classifications_data:
-        common_systems = set()
-    else:
-        common_systems = set(all_classifications_data[0].keys())
-        for element_map in all_classifications_data[1:]:
-            common_systems.intersection_update(element_map.keys())
+    common_systems = set(all_classifications_data[0].keys()) if all_classifications_data else set()
+    for element_map in all_classifications_data[1:]:
+        common_systems.intersection_update(element_map.keys())
 
     common_classifications = {}
     for system_name in common_systems:
-        # Check if the code for this system is consistent
         codes = [element_map[system_name] for element_map in all_classifications_data]
-        val1 = codes[0]
-        try:
-            unique_codes = list(set(codes))
-        except TypeError:
-            unique_codes = []
-            for c in codes:
-                if c not in unique_codes:
-                    unique_codes.append(c)
+        unique_codes = list(set(codes))
         is_mixed = len(unique_codes) > 1
 
         if is_mixed:
@@ -129,12 +116,39 @@ def analyze_guids(model: ifcopenshell.file, guids: list[str]) -> SelectionAnalys
                 other_values=[str(c) for c in unique_codes]
             )
         else:
-            common_classifications[system_name] = SharedValue(value=str(val1), is_mixed=False)
+            common_classifications[system_name] = SharedValue(value=str(codes[0]), is_mixed=False)
+
+    # Intersect Materials
+    all_materials_data = []
+    for e in elements:
+        mat_info = ifcopenshell.util.element.get_material(e)
+        # get_material can return a single material element, a list, or a material layer set etc.
+        # We simplify to a set of names present on the element
+        names = set()
+        if mat_info:
+            if isinstance(mat_info, (list, tuple)):
+                for m in mat_info:
+                    names.add(str(getattr(m, "Name", "Unnamed")))
+            elif hasattr(mat_info, "is_a") and mat_info.is_a("IfcMaterialLayerSetUsage"):
+                for layer in mat_info.ForLayerSet.MaterialLayers:
+                    names.add(str(getattr(layer.Material, "Name", "Unnamed")))
+            else:
+                names.add(str(getattr(mat_info, "Name", "Unnamed")))
+        all_materials_data.append(names)
+
+    common_material_names = set(all_materials_data[0]) if all_materials_data else set()
+    for names in all_materials_data[1:]:
+        common_material_names.intersection_update(names)
+
+    common_materials = {}
+    for mat_name in common_material_names:
+        common_materials[mat_name] = SharedValue(value=mat_name, is_mixed=False)
 
     return SelectionAnalysis(
         common_attributes=common_attributes,
         common_psets=common_psets,
         common_classifications=common_classifications,
+        common_materials=common_materials,
     )
 
 
