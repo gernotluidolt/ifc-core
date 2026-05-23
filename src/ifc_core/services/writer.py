@@ -98,9 +98,7 @@ class ManifestWriter:
         if element.is_a(target_class):
             return ModificationResult(success=True, msg=f"Class already {target_class}")
 
-        # Clean up types before reassignment
-        for rel in list(getattr(element, "IsTypedBy", []) or []):
-            ifcopenshell.api.run("root.remove_product", self.model, product=rel)
+        # reassign_class already unassigns type if incompatible.
 
         ifcopenshell.api.run(
             "root.reassign_class", self.model, product=element, ifc_class=target_class
