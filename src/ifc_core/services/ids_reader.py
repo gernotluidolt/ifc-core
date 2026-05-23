@@ -50,6 +50,22 @@ def _map_facet_to_requirement(facet) -> IdsRequirement:
     if not req_name and isinstance(raw_system, str) and raw_system:
         req_name = raw_system
 
+    # PartOf Support: extract target entity and relation
+    if req_type == "partof":
+        raw_entity = getattr(facet, "entity", None)
+        if raw_entity:
+            if hasattr(raw_entity, "name"):
+                req_name = str(getattr(raw_entity.name, "value", raw_entity.name) if hasattr(raw_entity.name, "value") else raw_entity.name)
+            else:
+                req_name = str(raw_entity)
+        
+        raw_relation = getattr(facet, "relation", None)
+        if raw_relation:
+            if hasattr(raw_relation, "name"):
+                raw_value = str(getattr(raw_relation.name, "value", raw_relation.name) if hasattr(raw_relation.name, "value") else raw_relation.name)
+            else:
+                raw_value = str(raw_relation)
+
     # Check for restrictions (Enumerations/Ranges)
     if restriction is None and hasattr(raw_value, "enumeration"):
         restriction = raw_value

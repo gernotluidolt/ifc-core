@@ -38,6 +38,100 @@ def _get_attribute_value(element, attr_name: str) -> Any:
         return info[attr_name]
     return None
 
+def _get_material_value(element) -> Any:
+    for rel in getattr(element, "HasAssociations", []):
+        if rel.is_a("IfcRelAssociatesMaterial"):
+            mat_select = rel.RelatingMaterial
+            if not mat_select:
+                continue
+            if mat_select.is_a("IfcMaterial"):
+                return mat_select.Name
+            elif mat_select.is_a("IfcMaterialLayerSetUsage"):
+                layers = mat_select.ForLayerSet.MaterialLayers
+                if layers and layers[0].Material:
+                    return layers[0].Material.Name
+            elif mat_select.is_a("IfcMaterialLayerSet"):
+                layers = mat_select.MaterialLayers
+                if layers and layers[0].Material:
+                    return layers[0].Material.Name
+            elif mat_select.is_a("IfcMaterialList"):
+                materials = mat_select.Materials
+                if materials:
+                    return materials[0].Name
+    return None
+
+def _get_classification_value(element, system_name: str) -> Any:
+    for rel in getattr(element, "HasAssociations", []):
+        if rel.is_a("IfcRelAssociatesClassification"):
+            cls_ref = rel.RelatingClassification
+            if cls_ref.is_a("IfcClassificationReference"):
+                ref_system = ""
+                if getattr(cls_ref, "ReferencedSource", None):
+                    ref_system = getattr(cls_ref.ReferencedSource, "Name", "")
+                
+                # If a specific system name is requested, ensure it matches
+                if not system_name or (system_name.lower() in ref_system.lower() or ref_system.lower() in system_name.lower()):
+                    return getattr(cls_ref, "Identification", getattr(cls_ref, "ItemReference", None))
+    return None
+
+def _check_part_of(element, req: IdsRequirement) -> bool:
+    target_entity = req.name  # e.g. "IFCSPACE"
+    if not target_entity:
+        return False
+    
+    target_relation = req.value  # e.g. "IFCRELCONTAINEDINSPATIALSTRUCTURE", optional
+
+    def get_parents(el):
+        parents = []
+        # Spatial containment
+        for rel in getattr(el, "ContainedInStructure", []):
+            if not target_relation or target_relation.upper() == "IFCRELCONTAINEDINSPATIALSTRUCTURE":
+                parents.append(rel.RelatingStructure)
+        
+        # Aggregation
+        for rel in getattr(el, "Decomposes", []):
+            if not target_relation or target_relation.upper() == "IFCRELAGGREGATES":
+                parents.append(rel.RelatingObject)
+
+        # Nesting
+        for rel in getattr(el, "Nests", []):
+            if not target_relation or target_relation.upper() == "IFCRELNESTS":
+                parents.append(rel.RelatingObject)
+        
+        # Assignment to group
+        for rel in getattr(el, "HasAssignments", []):
+            if rel.is_a("IfcRelAssignsToGroup"):
+                if not target_relation or target_relation.upper() == "IFCRELASSIGNSTOGROUP":
+                    parents.append(rel.RelatingGroup)
+
+        # Voids/Fills
+        for rel in getattr(el, "VoidsElements", []):
+            if not target_relation or target_relation.upper() == "IFCRELVOIDSELEMENT":
+                parents.append(rel.RelatingBuildingElement)
+        
+        for rel in getattr(el, "FillsVoids", []):
+            if not target_relation or target_relation.upper() == "IFCRELFILLSELEMENT":
+                parents.append(rel.RelatingOpeningElement)
+                
+        return parents
+
+    visited = set()
+    queue = get_parents(element)
+    
+    while queue:
+        current = queue.pop(0)
+        if current.GlobalId in visited:
+            continue
+        visited.add(current.GlobalId)
+        
+        if current.is_a(target_entity):
+            return True
+        
+        queue.extend(get_parents(current))
+        
+    return False
+
+
 
 def _check_value_against_options(value: Any, req: IdsRequirement) -> bool:
     if value is None:
@@ -103,6 +197,20 @@ def _is_applicable(element, applicability: list[IdsRequirement]) -> bool:
             if not _check_value_against_options(val, req):
                 return False
 
+        elif req_type == "material":
+            val = _get_material_value(element)
+            if not _check_value_against_options(val, req):
+                return False
+                
+        elif req_type == "classification":
+            val = _get_classification_value(element, req.name)
+            if not _check_value_against_options(val, req):
+                return False
+                
+        elif req_type == "partof":
+            if not _check_part_of(element, req):
+                return False
+
     return True
 
 
@@ -127,11 +235,23 @@ def check_mapping_status(element, spec: IdsSpecification) -> MappingStatus:
         req_type = req.type.lower()
         val = None
 
-        if req_type == "property":
+        if req_type == "entity":
+            if getattr(req, "name", None) and not element.is_a(req.name):
+                invalid.append(req)
+            continue
+            
+        elif req_type == "property":
             val = _get_property_value(element, req.property_set, req.name)
         elif req_type == "attribute":
             val = _get_attribute_value(element, req.name)
-        # Note: Material and Classification handling can be added here
+        elif req_type == "material":
+            val = _get_material_value(element)
+        elif req_type == "classification":
+            val = _get_classification_value(element, req.name)
+        elif req_type == "partof":
+            if not _check_part_of(element, req):
+                missing.append(req)
+            continue
 
         if val is None:
             missing.append(req)

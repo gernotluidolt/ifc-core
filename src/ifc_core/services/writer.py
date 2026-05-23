@@ -36,6 +36,7 @@ class ManifestWriter:
             "material": self._handle_material,
             "classification": self._handle_classification,
             "pset": self._handle_property,
+            "partof": self._handle_partof,
         }
 
     # --- Internal Helpers ---
@@ -155,6 +156,40 @@ class ManifestWriter:
         return ModificationResult(
             success=True, msg=f"Assigned Classification {req.value}"
         )
+
+    def _handle_partof(self, element, req) -> ModificationResult:
+        target_entity = self._normalize_ifc_class(req.name)
+        if not target_entity:
+            return ModificationResult(success=False, msg="Invalid target entity for PartOf")
+            
+        target_relation = req.value
+        
+        # Find a suitable target object in the model
+        target_obj = None
+        for obj in self.model.by_type(target_entity):
+            target_obj = obj
+            break
+            
+        if not target_obj:
+            return ModificationResult(success=False, msg=f"No instance of {target_entity} found to assign to")
+            
+        try:
+            rel_upper = target_relation.upper() if target_relation else ""
+            if rel_upper == "IFCRELCONTAINEDINSPATIALSTRUCTURE":
+                ifcopenshell.api.run("spatial.assign_container", self.model, relating_structure=target_obj, products=[element])
+            elif rel_upper == "IFCRELASSIGNSTOGROUP":
+                ifcopenshell.api.run("group.assign_group", self.model, group=target_obj, products=[element])
+            else:
+                if target_obj.is_a("IfcSpatialStructureElement"):
+                    ifcopenshell.api.run("spatial.assign_container", self.model, relating_structure=target_obj, products=[element])
+                elif target_obj.is_a("IfcGroup"):
+                    ifcopenshell.api.run("group.assign_group", self.model, group=target_obj, products=[element])
+                else:
+                    ifcopenshell.api.run("aggregate.assign_object", self.model, relating_object=target_obj, products=[element])
+                    
+            return ModificationResult(success=True, msg=f"Assigned to {target_entity}")
+        except Exception as e:
+            return ModificationResult(success=False, msg=f"Failed to assign PartOf: {str(e)}")
 
     # --- Public API ---
 
