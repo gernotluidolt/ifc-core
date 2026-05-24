@@ -163,6 +163,7 @@ class SelectionAnalysis(BaseModel):
     common_psets: dict[str, dict[str, SharedValue]]
     common_classifications: dict[str, SharedValue] = {}
     common_partof: dict[str, SharedValue] = {}
+    common_materials: dict[str, SharedValue] = {}
 
 class AnchorGroup(BaseModel):
     """A cluster of elements sharing a common anchor value."""

@@ -175,11 +175,50 @@ def analyze_guids(model: ifcopenshell.file, guids: list[str]) -> SelectionAnalys
             other_values=[str(n) for n in unique_names] if is_mixed else []
         )
 
+    # Intersect Materials
+    all_materials_data = []
+    for e in elements:
+        mat = ifcopenshell.util.element.get_material(e)
+        if mat:
+            if mat.is_a("IfcMaterial"):
+                all_materials_data.append(mat.Name)
+            elif mat.is_a("IfcMaterialList"):
+                all_materials_data.append(mat.Materials[0].Name if mat.Materials else "")
+            elif mat.is_a("IfcMaterialLayerSetUsage"):
+                try:
+                    all_materials_data.append(mat.ForLayerSet.MaterialLayers[0].Material.Name)
+                except Exception:
+                    all_materials_data.append("")
+            elif mat.is_a("IfcMaterialProfileSetUsage"):
+                try:
+                    all_materials_data.append(mat.ForProfileSet.MaterialProfiles[0].Material.Name)
+                except Exception:
+                    all_materials_data.append("")
+            else:
+                all_materials_data.append(getattr(mat, "Name", ""))
+        else:
+            all_materials_data.append("")
+
+    unique_mats = list(set([m for m in all_materials_data if m]))
+    is_mixed_mat = len(all_materials_data) > 1 and len(unique_mats) > 1
+    # also it is mixed if some have material and some don't
+    has_empty = any(not m for m in all_materials_data)
+    is_mixed_mat = is_mixed_mat or (has_empty and len(unique_mats) > 0)
+    
+    common_materials = {}
+    if unique_mats:
+        common_materials["Material"] = SharedValue(
+            value="<Mixed>" if is_mixed_mat else unique_mats[0],
+            is_mixed=is_mixed_mat,
+            other_values=unique_mats if is_mixed_mat else []
+        )
+
     return SelectionAnalysis(
         common_attributes=common_attributes,
         common_psets=common_psets,
         common_classifications=common_classifications,
         common_partof=common_partof,
+        common_materials=common_materials,
     )
 
 
