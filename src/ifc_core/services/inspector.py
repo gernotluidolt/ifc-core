@@ -131,10 +131,55 @@ def analyze_guids(model: ifcopenshell.file, guids: list[str]) -> SelectionAnalys
         else:
             common_classifications[system_name] = SharedValue(value=str(val1), is_mixed=False)
 
+    # Intersect PartOf
+    all_partof_data = []
+    for e in elements:
+        parents = []
+        for rel in getattr(e, "ContainedInStructure", []):
+            if rel.RelatingStructure:
+                parents.append(rel.RelatingStructure)
+        for rel in getattr(e, "Decomposes", []):
+            if rel.RelatingObject:
+                parents.append(rel.RelatingObject)
+        for rel in getattr(e, "HasAssignments", []):
+            if rel.is_a("IfcRelAssignsToGroup") and rel.RelatingGroup:
+                parents.append(rel.RelatingGroup)
+                
+        element_map = {}
+        for p in parents:
+            element_map[p.is_a()] = getattr(p, "Name", p.GlobalId)
+        all_partof_data.append(element_map)
+
+    if not all_partof_data:
+        common_parents = set()
+    else:
+        common_parents = set(all_partof_data[0].keys())
+        for element_map in all_partof_data[1:]:
+            common_parents.intersection_update(element_map.keys())
+
+    common_partof = {}
+    for parent_type in common_parents:
+        names = [element_map[parent_type] for element_map in all_partof_data]
+        val1 = names[0]
+        try:
+            unique_names = list(set(names))
+        except TypeError:
+            unique_names = []
+            for n in names:
+                if n not in unique_names:
+                    unique_names.append(n)
+        is_mixed = len(unique_names) > 1
+        common_partof[parent_type] = SharedValue(
+            value="<Mixed>" if is_mixed else str(val1),
+            is_mixed=is_mixed,
+            other_values=[str(n) for n in unique_names] if is_mixed else []
+        )
+
     return SelectionAnalysis(
         common_attributes=common_attributes,
         common_psets=common_psets,
         common_classifications=common_classifications,
+        common_partof=common_partof,
     )
 
 

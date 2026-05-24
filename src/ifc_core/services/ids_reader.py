@@ -105,6 +105,12 @@ def _map_facet_to_requirement(facet) -> IdsRequirement:
             elif hasattr(res, "pattern_value") and res.pattern_value is not None:
                 pattern = str(res.pattern_value)
 
+    # Some facets have dataType directly on the facet itself (like property facets)
+    if not data_type:
+        dt = getattr(facet, "dataType", getattr(facet, "data_type", None))
+        if dt:
+            data_type = str(dt).replace("xs:", "")
+
     # Final Value resolution
     final_value = None
     if raw_value is not None and not isinstance(raw_value, dict) and not hasattr(raw_value, "enumeration"):
