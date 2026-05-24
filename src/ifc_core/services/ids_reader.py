@@ -33,6 +33,7 @@ def _map_facet_to_requirement(facet) -> IdsRequirement:
     options = []
     min_val = None
     max_val = None
+    pattern = None
     data_type = None
     raw_value = getattr(facet, "value", None)
 
@@ -98,6 +99,12 @@ def _map_facet_to_requirement(facet) -> IdsRequirement:
             elif hasattr(res, "baseName") and res.baseName:
                 data_type = str(res.baseName).replace("xs:", "")
 
+            # Handle Regex Pattern
+            if hasattr(res, "pattern") and res.pattern is not None:
+                pattern = str(res.pattern)
+            elif hasattr(res, "pattern_value") and res.pattern_value is not None:
+                pattern = str(res.pattern_value)
+
     # Final Value resolution
     final_value = None
     if raw_value is not None and not isinstance(raw_value, dict) and not hasattr(raw_value, "enumeration"):
@@ -117,6 +124,7 @@ def _map_facet_to_requirement(facet) -> IdsRequirement:
         data_type=data_type,
         min_inclusive=min_val,
         max_inclusive=max_val,
+        pattern=pattern,
     )
 
 

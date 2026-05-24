@@ -20,6 +20,7 @@ class IdsRequirement(BaseModel):
     data_type: str | None = None  # e.g., "decimal", "integer", "boolean", "string"
     min_inclusive: float | None = None
     max_inclusive: float | None = None
+    pattern: str | None = None
 
 
 class IdsSpecification(BaseModel):
