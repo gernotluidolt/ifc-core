@@ -67,8 +67,14 @@ def _map_facet_to_requirement(facet) -> IdsRequirement:
             else:
                 raw_value = str(raw_relation)
 
-    # Check for restrictions (Enumerations/Ranges)
-    if restriction is None and hasattr(raw_value, "enumeration"):
+    # Check for restrictions (Enumerations/Ranges/Patterns)
+    if restriction is None and (
+        hasattr(raw_value, "enumeration") or
+        hasattr(raw_value, "pattern") or
+        hasattr(raw_value, "pattern_value") or
+        hasattr(raw_value, "minInclusive") or
+        hasattr(raw_value, "maxInclusive")
+    ):
         restriction = raw_value
 
     if restriction:
