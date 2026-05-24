@@ -68,42 +68,37 @@ def _map_facet_to_requirement(facet) -> IdsRequirement:
                 raw_value = str(raw_relation)
 
     # Check for restrictions (Enumerations/Ranges/Patterns)
-    if restriction is None and (
-        hasattr(raw_value, "enumeration") or
-        hasattr(raw_value, "pattern") or
-        hasattr(raw_value, "pattern_value") or
-        hasattr(raw_value, "minInclusive") or
-        hasattr(raw_value, "maxInclusive")
-    ):
+    has_restriction_data = False
+    res_opts = getattr(raw_value, "options", None) if not isinstance(raw_value, dict) else raw_value
+    if isinstance(res_opts, dict):
+        if any(k in res_opts for k in ("enumeration", "pattern", "pattern_value", "minInclusive", "maxInclusive")):
+            has_restriction_data = True
+            
+    if restriction is None and has_restriction_data:
         restriction = raw_value
 
     if restriction:
         res = restriction
-        # Handle Enumerations (List of choices)
-        if isinstance(res, dict):
-            if res.get("enumeration"):
-                options = [str(v) for v in res["enumeration"]]
-            if res.get("minInclusive") is not None:
-                min_val = float(res["minInclusive"])
-            if res.get("maxInclusive") is not None:
-                max_val = float(res["maxInclusive"])
-            if res.get("base"):
-                data_type = str(res["base"]).replace("xs:", "")
-        else:
-            if hasattr(res, "enumeration") and res.enumeration:
-                options = [str(v) for v in res.enumeration]
-
-            # Handle Ranges
-            if hasattr(res, "minInclusive") and res.minInclusive is not None:
-                min_val = float(res.minInclusive)
-            if hasattr(res, "maxInclusive") and res.maxInclusive is not None:
-                max_val = float(res.maxInclusive)
-            
-            # Extract base type from ifctester object
-            if hasattr(res, "base") and res.base:
-                data_type = str(res.base).replace("xs:", "")
-            elif hasattr(res, "baseName") and res.baseName:
-                data_type = str(res.baseName).replace("xs:", "")
+        # Get options dict either from dict itself or from Restriction object
+        opts = res if isinstance(res, dict) else getattr(res, "options", {})
+        
+        if isinstance(opts, dict):
+            if "enumeration" in opts:
+                options = [str(v) for v in opts["enumeration"]]
+            if "minInclusive" in opts and opts["minInclusive"] is not None:
+                min_val = float(opts["minInclusive"])
+            if "maxInclusive" in opts and opts["maxInclusive"] is not None:
+                max_val = float(opts["maxInclusive"])
+            if "pattern" in opts and opts["pattern"]:
+                pattern = str(opts["pattern"])
+            elif "pattern_value" in opts and opts["pattern_value"]:
+                pattern = str(opts["pattern_value"])
+                
+        # Extract base type from ifctester object
+        if hasattr(res, "base") and res.base:
+            data_type = str(res.base).replace("xs:", "")
+        elif hasattr(res, "baseName") and res.baseName:
+            data_type = str(res.baseName).replace("xs:", "")
 
             # Handle Regex Pattern
             if hasattr(res, "pattern") and res.pattern is not None:
@@ -119,7 +114,7 @@ def _map_facet_to_requirement(facet) -> IdsRequirement:
 
     # Final Value resolution
     final_value = None
-    if raw_value is not None and not isinstance(raw_value, dict) and not hasattr(raw_value, "enumeration"):
+    if raw_value is not None and not isinstance(raw_value, dict) and restriction is None:
         final_value = str(raw_value)
     
     # Smart Fallback: if we have exactly one option, we can use it as a concrete value

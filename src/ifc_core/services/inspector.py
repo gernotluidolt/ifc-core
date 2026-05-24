@@ -32,7 +32,7 @@ def analyze_guids(model: ifcopenshell.file, guids: list[str]) -> SelectionAnalys
         common_attributes["Entity"] = SharedValue(value=unique_types[0], is_mixed=False)
 
     # 2. Whitelisted Core Attributes
-    whitelist = ["Name", "ObjectType"]
+    whitelist = ["Name", "ObjectType", "Tag", "Description", "GlobalId"]
     for attr in whitelist:
         # Only include if EVERY element possesses this attribute
         if not all(hasattr(e, attr) for e in elements):
