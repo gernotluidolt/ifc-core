@@ -61,6 +61,25 @@ class ManifestWriter:
         # Optionally, check against a known set of IFC classes here
         return base
 
+    def _cast_value(self, value: Any, data_type: str | None) -> Any:
+        if value is None or data_type is None:
+            return value
+            
+        dt = data_type.strip().upper()
+        try:
+            if dt == "IFCINTEGER":
+                return int(float(value)) if isinstance(value, (str, float)) else int(value)
+            elif dt == "IFCREAL":
+                return float(value)
+            elif dt == "IFCBOOLEAN":
+                if isinstance(value, str):
+                    return value.lower() in ("true", "1", "t", "yes", "y")
+                return bool(value)
+            # Other types like IFCLABEL, IFCTEXT, IFCIDENTIFIER will be string naturally
+            return str(value)
+        except (ValueError, TypeError):
+            return value
+
     # --- Requirement Handlers ---
 
     def _handle_property(self, element, req) -> ModificationResult:
@@ -76,8 +95,10 @@ class ManifestWriter:
             "pset.add_pset", self.model, product=element, name=pset_name
         )
 
+        casted_value = self._cast_value(req.value, getattr(req, "data_type", None))
+
         ifcopenshell.api.run(
-            "pset.edit_pset", self.model, pset=pset, properties={req.name: req.value}
+            "pset.edit_pset", self.model, pset=pset, properties={req.name: casted_value}
         )
         return ModificationResult(success=True, msg=f"Set Property {req.name}")
 
@@ -113,7 +134,7 @@ class ManifestWriter:
             mat = ifcopenshell.api.run("material.add_material", self.model, name=name)
             self._materials_cache[name] = mat
         ifcopenshell.api.run(
-            "material.assign_material", self.model, product=element, material=mat
+            "material.assign_material", self.model, products=[element], material=mat
         )
         return ModificationResult(success=True, msg=f"Assigned Material {name}")
 
@@ -146,7 +167,7 @@ class ManifestWriter:
         ifcopenshell.api.run(
             "classification.add_reference",
             self.model,
-            product=element,
+            products=[element],
             classification=cls_obj,
             identification=req.value,
             name=req.name or req.value,

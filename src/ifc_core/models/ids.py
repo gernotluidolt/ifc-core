@@ -41,9 +41,10 @@ class ConcreteRequirement(BaseModel):
     """
 
     type: str
-    name: str
+    name: str | None = None
     value: Any
     property_set: str | None = None
+    data_type: str | None = None
 
 
 class SpecificationManifest(BaseModel):
