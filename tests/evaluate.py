@@ -57,7 +57,12 @@ def evaluate():
                         val = r.options[0]
                     elif r.pattern:
                         # Simple heuristics for known patterns in tests
-                        val = "IFC-12345" if "IFC" in r.pattern else "Test1234"
+                        if "IFC" in r.pattern:
+                            val = "IFC-12345"
+                        elif "DESC" in r.pattern:
+                            val = "DESC-123"
+                        else:
+                            val = "Test1234"
                     elif r.min_inclusive is not None:
                         val = r.min_inclusive
                     elif r.data_type == "boolean":

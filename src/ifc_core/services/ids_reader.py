@@ -95,7 +95,10 @@ def _map_facet_to_requirement(facet) -> IdsRequirement:
                 pattern = str(opts["pattern_value"])
                 
         # Extract base type from ifctester object
-        if hasattr(res, "base") and res.base:
+        dt = getattr(facet, "dataType", getattr(facet, "data_type", None))
+        if dt:
+            data_type = str(dt).replace("xs:", "")
+        elif hasattr(res, "base") and res.base:
             data_type = str(res.base).replace("xs:", "")
         elif hasattr(res, "baseName") and res.baseName:
             data_type = str(res.baseName).replace("xs:", "")

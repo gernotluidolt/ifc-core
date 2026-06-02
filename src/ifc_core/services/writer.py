@@ -66,11 +66,28 @@ class ManifestWriter:
             return value
             
         dt = data_type.strip().upper()
+        if dt == "DECIMAL":
+            dt = "IFCREAL"
+        elif dt == "INTEGER":
+            dt = "IFCINTEGER"
+        elif dt == "BOOLEAN":
+            dt = "IFCBOOLEAN"
+        elif dt == "STRING":
+            dt = "IFCLABEL"
+        elif dt == "LOGICAL":
+            dt = "IFCLOGICAL"
+            
         try:
             if dt == "IFCINTEGER":
                 return int(float(value)) if isinstance(value, (str, float)) else int(value)
-            elif dt == "IFCREAL":
+            elif dt == "IFCREAL" or "MEASURE" in dt:
                 return float(value)
+            elif dt == "IFCLOGICAL":
+                if isinstance(value, str):
+                    if value.lower() in ("unknown", "u", "none", "null"):
+                        return None
+                    return value.lower() in ("true", "1", "t", "yes", "y")
+                return bool(value)
             elif dt == "IFCBOOLEAN":
                 if isinstance(value, str):
                     return value.lower() in ("true", "1", "t", "yes", "y")
@@ -97,8 +114,43 @@ class ManifestWriter:
 
         casted_value = self._cast_value(req.value, getattr(req, "data_type", None))
 
+        # Explicitly wrap the value in the requested IFC data type entity to prevent Type Mismatch
+        data_type = getattr(req, "data_type", None)
+        if data_type:
+            dt = data_type.strip().upper()
+            if dt == "DECIMAL":
+                ifc_type = "IfcReal"
+            elif dt == "INTEGER":
+                ifc_type = "IfcInteger"
+            elif dt == "BOOLEAN":
+                ifc_type = "IfcBoolean"
+            elif dt == "STRING":
+                ifc_type = "IfcLabel"
+            elif dt == "LOGICAL":
+                ifc_type = "IfcLogical"
+            else:
+                if dt.startswith("IFC"):
+                    ifc_type = dt
+                else:
+                    ifc_type = "Ifc" + data_type.strip().capitalize()
+
+            if ifc_type.upper() == "IFCLOGICAL":
+                if casted_value is None:
+                    wrapped_value = self.model.create_entity(ifc_type, "UNKNOWN")
+                elif isinstance(casted_value, str) and casted_value.upper() in ("UNKNOWN", "U"):
+                    wrapped_value = self.model.create_entity(ifc_type, "UNKNOWN")
+                else:
+                    wrapped_value = self.model.create_entity(ifc_type, bool(casted_value))
+            else:
+                try:
+                    wrapped_value = self.model.create_entity(ifc_type, casted_value)
+                except Exception:
+                    wrapped_value = casted_value
+        else:
+            wrapped_value = casted_value
+
         ifcopenshell.api.run(
-            "pset.edit_pset", self.model, pset=pset, properties={req.name: casted_value}
+            "pset.edit_pset", self.model, pset=pset, properties={req.name: wrapped_value}
         )
         return ModificationResult(success=True, msg=f"Set Property {req.name}")
 
