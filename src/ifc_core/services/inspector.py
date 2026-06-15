@@ -46,6 +46,25 @@ def analyze_guids(model: ifcopenshell.file, guids: list[str]) -> SelectionAnalys
         if not is_mixed:
             common_attributes[attr] = SharedValue(value=val1, is_mixed=False)
 
+    # 3. Spatial Containment (Storey)
+    storeys_for_elements = []
+    for e in elements:
+        found_storey = False
+        for rel in list(getattr(e, "ContainedInStructure", []) or []):
+            if rel.is_a("IfcRelContainedInSpatialStructure") and rel.RelatingStructure.is_a("IfcBuildingStorey"):
+                storeys_for_elements.append(getattr(rel.RelatingStructure, "Name", ""))
+                found_storey = True
+                break
+        if not found_storey:
+            storeys_for_elements.append(None)
+
+    if storeys_for_elements and all(s is not None for s in storeys_for_elements):
+        unique_storeys = list(set(storeys_for_elements))
+        if len(unique_storeys) == 1:
+            common_attributes["Storey"] = SharedValue(value=unique_storeys[0], is_mixed=False)
+        else:
+            common_attributes["Storey"] = SharedValue(value="<Mixed>", is_mixed=True, other_values=unique_storeys)
+
     # Intersect Psets
     all_psets = [ifcopenshell.util.element.get_psets(e) for e in elements]
     common_pset_names = set(all_psets[0].keys())

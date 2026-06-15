@@ -8,6 +8,36 @@ from ..models.ids import ConcreteRequirement, SpecificationManifest
 from ..models.ifc import BulkSpecificationManifest, ModificationResult
 
 
+def cast_value_by_type(value: Any, data_type: str | None) -> Any:
+    if data_type is None or value is None:
+        return value
+
+    dt_lower = str(data_type).lower().strip()
+
+    if dt_lower in ("boolean", "ifcboolean", "bool"):
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, str):
+            return value.lower() in ("true", "1", "yes")
+        return bool(value)
+
+    if dt_lower in ("integer", "ifcinteger", "int"):
+        try:
+            return int(float(value))
+        except (ValueError, TypeError):
+            return value
+
+    if dt_lower in ("decimal", "real", "ifcreal", "double", "float") or any(
+        x in dt_lower for x in ("measure", "density")
+    ):
+        try:
+            return float(value)
+        except (ValueError, TypeError):
+            return value
+
+    return value
+
+
 class ManifestWriter:
     """
     Service Layer to apply requirements to IFC elements.
@@ -26,7 +56,6 @@ class ManifestWriter:
             getattr(c, "Name", ""): c for c in model.by_type("IfcClassification")
         }
 
-        # Dispatch table for requirement types
         self._handlers: dict[
             str, Callable[[Any, ConcreteRequirement], ModificationResult]
         ] = {
@@ -36,6 +65,7 @@ class ManifestWriter:
             "material": self._handle_material,
             "classification": self._handle_classification,
             "pset": self._handle_property,
+            "partof": self._handle_partof,
         }
 
     # --- Internal Helpers ---
@@ -75,17 +105,20 @@ class ManifestWriter:
             "pset.add_pset", self.model, product=element, name=pset_name
         )
 
+        cast_val = cast_value_by_type(req.value, getattr(req, "data_type", None))
+
         ifcopenshell.api.run(
-            "pset.edit_pset", self.model, pset=pset, properties={req.name: req.value}
+            "pset.edit_pset", self.model, pset=pset, properties={req.name: cast_val}
         )
         return ModificationResult(success=True, msg=f"Set Property {req.name}")
 
     def _handle_attribute(self, element, req) -> ModificationResult:
+        cast_val = cast_value_by_type(req.value, getattr(req, "data_type", None))
         ifcopenshell.api.run(
             "attribute.edit_attributes",
             self.model,
             product=element,
-            attributes={req.name: req.value},
+            attributes={req.name: cast_val},
         )
         return ModificationResult(success=True, msg=f"Set Attribute {req.name}")
 
@@ -108,52 +141,91 @@ class ManifestWriter:
 
     def _handle_material(self, element, req) -> ModificationResult:
         name = req.value
-        # Only use the pre-cached materials for performance
-        mat = self._materials_cache.get(name)
-        if not mat:
-            mat = ifcopenshell.api.run("material.add_material", self.model, name=name)
-            self._materials_cache[name] = mat
-        ifcopenshell.api.run(
-            "material.assign_material", self.model, product=element, material=mat
+        if not name:
+            return ModificationResult(success=False, msg="Missing material name")
+
+        material = self.model.create_entity("IfcMaterial", Name=str(name))
+        self.model.create_entity(
+            "IfcRelAssociatesMaterial",
+            GlobalId=ifcopenshell.guid.new(),
+            RelatedObjects=[element],
+            RelatingMaterial=material,
         )
         return ModificationResult(success=True, msg=f"Assigned Material {name}")
 
     def _handle_classification(self, element, req) -> ModificationResult:
-        # req.name is expected to be the classification system name (e.g., "Uniclass 2015").
-        # If your workflow distinguishes system vs. item, adapt here.
         system_name = (req.name or "").strip()
         if not system_name:
             return ModificationResult(
                 success=False, msg="Missing classification system name"
             )
 
-        cls_obj = self._classifications_cache.get(system_name) or next(
-            (
-                c
-                for c in self.model.by_type("IfcClassification")
-                if getattr(c, "Name", "") == system_name
-            ),
+        classification = next(
+            (c for c in self.model.by_type("IfcClassification") if getattr(c, "Name", "") == system_name),
             None,
         )
-
-        if not cls_obj:
-            cls_obj = ifcopenshell.api.run(
-                "classification.add_classification",
-                self.model,
-                classification=system_name,
+        if not classification:
+            classification = self.model.create_entity(
+                "IfcClassification", Name=system_name, Source="IDS Specification"
             )
 
-        self._classifications_cache[system_name] = cls_obj
-        ifcopenshell.api.run(
-            "classification.add_reference",
-            self.model,
-            product=element,
-            classification=cls_obj,
-            identification=req.value,
-            name=req.name or req.value,
+        classification_reference = self.model.create_entity(
+            "IfcClassificationReference",
+            Identification=str(req.value),
+            ReferencedSource=classification,
+        )
+
+        self.model.create_entity(
+            "IfcRelAssociatesClassification",
+            GlobalId=ifcopenshell.guid.new(),
+            RelatedObjects=[element],
+            RelatingClassification=classification_reference,
         )
         return ModificationResult(
             success=True, msg=f"Assigned Classification {req.value}"
+        )
+
+    def _handle_partof(self, element, req) -> ModificationResult:
+        relation_type = str(req.relation or "").upper().strip()
+        if not relation_type:
+            relation_type = "IFCRELCONTAINEDINSPATIALSTRUCTURE"
+
+        if relation_type == "IFCRELCONTAINEDINSPATIALSTRUCTURE":
+            target_name = str(req.value).strip()
+            if not target_name:
+                return ModificationResult(
+                    success=False, msg="Missing spatial structure target name"
+                )
+
+            storeys = self.model.by_type("IfcBuildingStorey")
+            target_storey = next((s for s in storeys if getattr(s, "Name", "") == target_name), None)
+
+            if not target_storey:
+                return ModificationResult(
+                    success=False, msg=f"IfcBuildingStorey '{target_name}' not found in model"
+                )
+
+            for rel in list(self.model.by_type("IfcRelContainedInSpatialStructure")):
+                if element in rel.RelatedElements:
+                    related = list(rel.RelatedElements)
+                    related.remove(element)
+                    if not related:
+                        self.model.remove(rel)
+                    else:
+                        rel.RelatedElements = related
+
+            self.model.create_entity(
+                "IfcRelContainedInSpatialStructure",
+                GlobalId=ifcopenshell.guid.new(),
+                RelatedElements=[element],
+                RelatingStructure=target_storey
+            )
+            return ModificationResult(
+                success=True, msg=f"Assigned to spatial containment of '{target_name}'"
+            )
+
+        return ModificationResult(
+            success=False, msg=f"Unsupported partOf relation: {relation_type}"
         )
 
     # --- Public API ---
