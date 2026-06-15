@@ -113,6 +113,10 @@ class QueryEngine:
                 if criterion.property_set and system_name != criterion.property_set:
                     continue
 
+                # If the value is a placeholder meaning "any classification in this system"
+                if criterion.value in (True, "True", "true", None):
+                    return True
+
                 code = getattr(ref, "Identification", getattr(ref, "ItemReference", None))
                 name = getattr(ref, "Name", None)
 

@@ -268,3 +268,19 @@ def test_query_classification_matching(mock_ifc_store):
     results = mock_ifc_store.execute_query(query_system_and_code)
     assert guid in results
 
+    # 4. Query by classification system name only (value is True)
+    query_system_only = ComplexQuery(
+        logical_op="AND",
+        criteria=[
+            FilterCriterion(
+                category="Classification",
+                property_set="DSR_System",
+                operator=ComparisonOperator.EQUALS,
+                value=True,
+            )
+        ],
+    )
+    results = mock_ifc_store.execute_query(query_system_only)
+    assert guid in results
+
+
