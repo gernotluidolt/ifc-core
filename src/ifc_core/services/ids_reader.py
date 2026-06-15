@@ -109,6 +109,17 @@ def _map_facet_to_requirement(facet) -> IdsRequirement:
     if final_value is None and len(options) == 1:
         final_value = options[0]
 
+    expected_value = None
+    if req_type == "material":
+        expected_value = final_value
+    elif req_type == "partof":
+        expected_value = req_name
+
+    pattern = None
+    res_obj = restriction or raw_value
+    if res_obj and hasattr(res_obj, "options") and isinstance(res_obj.options, dict):
+        pattern = res_obj.options.get("pattern")
+
     return IdsRequirement(
         type=req_type,
         name=req_name,
@@ -121,6 +132,8 @@ def _map_facet_to_requirement(facet) -> IdsRequirement:
         max_inclusive=max_val,
         cardinality=getattr(facet, "cardinality", None),
         relation=getattr(facet, "relation", None),
+        expected_value=expected_value,
+        pattern=pattern,
     )
 
 

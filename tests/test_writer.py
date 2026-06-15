@@ -288,3 +288,39 @@ def test_dynamic_relations_and_core_attributes(mock_ifc_store):
     b_agg = next((r for r in aggregates if r.RelatingObject == building), None)
     assert b_agg is not None
     assert roof in b_agg.RelatedObjects
+
+
+def test_pattern_regex_validation(mock_ifc_store):
+    from ifc_core.models.ids import ConcreteRequirement
+    from ifc_core.models.ifc import BulkSpecificationManifest
+
+    elements = mock_ifc_store._model.by_type("IfcWall")
+    guid = elements[0].GlobalId
+
+    # Define a requirement with pattern (e.g. IFC-[0-9]{5})
+    manifest = BulkSpecificationManifest(
+        element_guids=[guid],
+        specification_name="PatternSpec",
+        requirements=[
+            ConcreteRequirement(
+                type="Attribute",
+                name="Tag",
+                value="IFC-12345",
+                pattern="IFC-[0-9]{5}",
+            )
+        ]
+    )
+
+    # 1. Valid value matching pattern
+    results = mock_ifc_store.apply_bulk_manifest(manifest)
+    assert all(r.success for r in results)
+    
+    wall = mock_ifc_store._model.by_guid(guid)
+    assert wall.Tag == "IFC-12345"
+
+    # 2. Invalid value failing pattern
+    manifest.requirements[0].value = "INVALID-123"
+    results_invalid = mock_ifc_store.apply_bulk_manifest(manifest)
+    assert len(results_invalid) == 1
+    assert not results_invalid[0].success
+    assert "does not match pattern" in results_invalid[0].msg

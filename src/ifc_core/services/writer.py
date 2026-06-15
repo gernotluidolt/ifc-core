@@ -286,6 +286,21 @@ class ManifestWriter:
         self, element: Any, req: ConcreteRequirement
     ) -> ModificationResult:
         try:
+            if req.pattern and req.value is not None:
+                import re
+                val_str = str(req.value)
+                try:
+                    if not re.match(req.pattern, val_str):
+                        return ModificationResult(
+                            success=False,
+                            msg=f"Value '{val_str}' does not match pattern '{req.pattern}'"
+                        )
+                except Exception as e:
+                    return ModificationResult(
+                        success=False,
+                        msg=f"Invalid regex pattern '{req.pattern}': {str(e)}"
+                    )
+
             handler = self._handlers.get((req.type or "").lower())
             if not handler:
                 return ModificationResult(
