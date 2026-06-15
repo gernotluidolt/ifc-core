@@ -110,8 +110,8 @@ class IfcStore:
         """List known materials with usage counts across elements."""
         return self._discovery.get_materials()
 
-    def get_entity_counts(self) -> list[CountedItem]:
-        """List IfcProduct entity types with occurrence counts."""
+    def get_entity_counts(self) -> dict[str, list[CountedItem]]:
+        """List IfcProduct entity types with occurrence counts grouped by category."""
         return self._discovery.get_entity_counts()
 
     def get_classification_tree(self) -> ClassificationTree:

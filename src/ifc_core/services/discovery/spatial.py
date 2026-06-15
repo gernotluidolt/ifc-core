@@ -87,7 +87,7 @@ def get_spatial_tree(
     return [build_node(r) for r in roots]
 
 
-def get_entity_counts(model: ifcopenshell.file) -> list[CountedItem]:
+def get_entity_counts(model: ifcopenshell.file) -> dict[str, list[CountedItem]]:
     entity_counts = defaultdict(int)
     for element in model.by_type("IfcProduct"):
         try:
@@ -95,7 +95,48 @@ def get_entity_counts(model: ifcopenshell.file) -> list[CountedItem]:
         except Exception:
             continue
 
-    return [
-        CountedItem(name=name, element_count=count)
-        for name, count in sorted(entity_counts.items(), key=lambda x: x[0])
+    # Class inheritance categorization parent lists
+    building_parents = ["IfcBuildingElement"]
+    finishing_parents = [
+        "IfcFurniture",
+        "IfcSystemFurnitureElement",
+        "IfcWindow",
+        "IfcDoor",
+        "IfcStair",
+        "IfcRailing",
     ]
+    distribution_parents = ["IfcDistributionElement"]
+
+    type_categories = {}
+    grouped = {
+        "all": [],
+        "building": [],
+        "finishing_furniture": [],
+        "distribution": [],
+    }
+
+    for name, count in sorted(entity_counts.items(), key=lambda x: x[0]):
+        item = CountedItem(name=name, element_count=count)
+        grouped["all"].append(item)
+
+        if name not in type_categories:
+            try:
+                temp_el = model.create_entity(name)
+                if any(temp_el.is_a(p) for p in building_parents):
+                    type_categories[name] = "building"
+                elif any(temp_el.is_a(p) for p in finishing_parents):
+                    type_categories[name] = "finishing_furniture"
+                elif any(temp_el.is_a(p) for p in distribution_parents):
+                    type_categories[name] = "distribution"
+                else:
+                    type_categories[name] = None
+                model.remove(temp_el)
+            except Exception:
+                type_categories[name] = None
+
+        cat = type_categories[name]
+        if cat:
+            grouped[cat].append(item)
+
+    return grouped
+

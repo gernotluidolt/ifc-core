@@ -29,3 +29,20 @@ def test_get_psets(real_ifc_store):
 def test_get_materials(real_ifc_store):
     mats = real_ifc_store.get_materials()
     assert len(mats) > 0
+
+
+def test_get_entity_counts_grouped(real_ifc_store):
+    counts = real_ifc_store.get_entity_counts()
+    assert isinstance(counts, dict)
+    assert "all" in counts
+    assert "building" in counts
+    assert "finishing_furniture" in counts
+    assert "distribution" in counts
+    
+    # Each list should contain CountedItem elements
+    for cat in ("all", "building", "finishing_furniture", "distribution"):
+        assert isinstance(counts[cat], list)
+        for item in counts[cat]:
+            assert hasattr(item, "name")
+            assert hasattr(item, "element_count")
+
