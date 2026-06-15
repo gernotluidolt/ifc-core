@@ -31,20 +31,53 @@ def analyze_guids(model: ifcopenshell.file, guids: list[str]) -> SelectionAnalys
     if len(unique_types) == 1:
         common_attributes["Entity"] = SharedValue(value=unique_types[0], is_mixed=False)
 
-    # 2. Whitelisted Core Attributes
-    whitelist = ["Name", "ObjectType"]
-    for attr in whitelist:
-        # Only include if EVERY element possesses this attribute
-        if not all(hasattr(e, attr) for e in elements):
+    # 2. Core Attributes (obtained dynamically from element info)
+    all_attrs = set()
+    if elements:
+        try:
+            all_attrs = set(elements[0].get_info().keys())
+            for e in elements[1:]:
+                all_attrs.intersection_update(e.get_info().keys())
+        except Exception:
+            all_attrs = {"Name", "ObjectType", "Description", "Tag"}
+
+    for attr in all_attrs:
+        if attr in ("id", "type", "GlobalId", "OwnerHistory"):
             continue
-            
         vals = [getattr(e, attr, None) for e in elements]
+        if all(v is None for v in vals):
+            continue
         val1 = vals[0]
         unique_vals = list(set([str(v) if v is not None else "" for v in vals]))
         is_mixed = len(unique_vals) > 1
 
-        if not is_mixed:
+        if is_mixed:
+            common_attributes[attr] = SharedValue(
+                value="<Mixed>",
+                is_mixed=True,
+                other_values=unique_vals
+            )
+        else:
             common_attributes[attr] = SharedValue(value=val1, is_mixed=False)
+
+    # 3. Spatial Containment (Storey)
+    storeys_for_elements = []
+    for e in elements:
+        found_storey = False
+        for rel in list(getattr(e, "ContainedInStructure", []) or []):
+            if rel.is_a("IfcRelContainedInSpatialStructure") and rel.RelatingStructure.is_a("IfcBuildingStorey"):
+                storeys_for_elements.append(getattr(rel.RelatingStructure, "Name", ""))
+                found_storey = True
+                break
+        if not found_storey:
+            storeys_for_elements.append(None)
+
+    if storeys_for_elements and all(s is not None for s in storeys_for_elements):
+        unique_storeys = list(set(storeys_for_elements))
+        if len(unique_storeys) == 1:
+            common_attributes["Storey"] = SharedValue(value=unique_storeys[0], is_mixed=False)
+        else:
+            common_attributes["Storey"] = SharedValue(value="<Mixed>", is_mixed=True, other_values=unique_storeys)
 
     # Intersect Psets
     all_psets = [ifcopenshell.util.element.get_psets(e) for e in elements]

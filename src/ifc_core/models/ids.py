@@ -20,6 +20,10 @@ class IdsRequirement(BaseModel):
     data_type: str | None = None  # e.g., "decimal", "integer", "boolean", "string"
     min_inclusive: float | None = None
     max_inclusive: float | None = None
+    cardinality: str | None = None
+    relation: str | None = None
+    expected_value: str | None = None
+    pattern: str | None = None
 
 
 class IdsSpecification(BaseModel):
@@ -43,6 +47,10 @@ class ConcreteRequirement(BaseModel):
     name: str
     value: Any
     property_set: str | None = None
+    data_type: str | None = None
+    relation: str | None = None
+    expected_value: str | None = None
+    pattern: str | None = None
 
 
 class SpecificationManifest(BaseModel):

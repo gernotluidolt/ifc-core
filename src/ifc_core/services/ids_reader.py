@@ -33,7 +33,6 @@ def _map_facet_to_requirement(facet) -> IdsRequirement:
     options = []
     min_val = None
     max_val = None
-    data_type = None
     raw_value = getattr(facet, "value", None)
 
     # ifctester may represent restrictions either in "restriction" or in a dict-like "value"
@@ -64,8 +63,6 @@ def _map_facet_to_requirement(facet) -> IdsRequirement:
                 min_val = float(res["minInclusive"])
             if res.get("maxInclusive") is not None:
                 max_val = float(res["maxInclusive"])
-            if res.get("base"):
-                data_type = str(res["base"]).replace("xs:", "")
         else:
             if hasattr(res, "enumeration") and res.enumeration:
                 options = [str(v) for v in res.enumeration]
@@ -75,12 +72,33 @@ def _map_facet_to_requirement(facet) -> IdsRequirement:
                 min_val = float(res.minInclusive)
             if hasattr(res, "maxInclusive") and res.maxInclusive is not None:
                 max_val = float(res.maxInclusive)
-            
-            # Extract base type from ifctester object
+
+    # Retrieve and normalize dataType
+    raw_data_type = getattr(facet, "dataType", None)
+    if not raw_data_type and restriction:
+        res = restriction
+        if isinstance(res, dict):
+            if res.get("base"):
+                raw_data_type = str(res["base"]).replace("xs:", "")
+        else:
             if hasattr(res, "base") and res.base:
-                data_type = str(res.base).replace("xs:", "")
+                raw_data_type = str(res.base).replace("xs:", "")
             elif hasattr(res, "baseName") and res.baseName:
-                data_type = str(res.baseName).replace("xs:", "")
+                raw_data_type = str(res.baseName).replace("xs:", "")
+
+    data_type = None
+    if raw_data_type:
+        dt_str = str(raw_data_type).lower().strip()
+        if "boolean" in dt_str:
+            data_type = "boolean"
+        elif "integer" in dt_str or dt_str == "int":
+            data_type = "integer"
+        elif any(x in dt_str for x in ("real", "decimal", "double", "float", "measure", "density")):
+            data_type = "decimal"
+        elif "string" in dt_str or "label" in dt_str or "text" in dt_str:
+            data_type = "string"
+        else:
+            data_type = dt_str
 
     # Final Value resolution
     final_value = None
@@ -90,6 +108,17 @@ def _map_facet_to_requirement(facet) -> IdsRequirement:
     # Smart Fallback: if we have exactly one option, we can use it as a concrete value
     if final_value is None and len(options) == 1:
         final_value = options[0]
+
+    expected_value = None
+    if req_type == "material":
+        expected_value = final_value
+    elif req_type == "partof":
+        expected_value = req_name
+
+    pattern = None
+    res_obj = restriction or raw_value
+    if res_obj and hasattr(res_obj, "options") and isinstance(res_obj.options, dict):
+        pattern = res_obj.options.get("pattern")
 
     return IdsRequirement(
         type=req_type,
@@ -101,6 +130,10 @@ def _map_facet_to_requirement(facet) -> IdsRequirement:
         data_type=data_type,
         min_inclusive=min_val,
         max_inclusive=max_val,
+        cardinality=getattr(facet, "cardinality", None),
+        relation=getattr(facet, "relation", None),
+        expected_value=expected_value,
+        pattern=pattern,
     )
 
 
