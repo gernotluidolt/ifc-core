@@ -144,14 +144,28 @@ class ManifestWriter:
         if not name:
             return ModificationResult(success=False, msg="Missing material name")
 
-        material = self.model.create_entity("IfcMaterial", Name=str(name))
+        target_name = str(name).strip()
+        material = next((m for m in self.model.by_type("IfcMaterial") if getattr(m, "Name", None) == target_name), None)
+        if not material:
+            material = self.model.create_entity("IfcMaterial", Name=target_name)
+
+        # Clear old material associations for this element
+        for rel in list(self.model.by_type("IfcRelAssociatesMaterial")):
+            if element in rel.RelatedObjects:
+                related = list(rel.RelatedObjects)
+                related.remove(element)
+                if not related:
+                    self.model.remove(rel)
+                else:
+                    rel.RelatedObjects = related
+
         self.model.create_entity(
             "IfcRelAssociatesMaterial",
             GlobalId=ifcopenshell.guid.new(),
             RelatedObjects=[element],
             RelatingMaterial=material,
         )
-        return ModificationResult(success=True, msg=f"Assigned Material {name}")
+        return ModificationResult(success=True, msg=f"Assigned Material {target_name}")
 
     def _handle_classification(self, element, req) -> ModificationResult:
         system_name = (req.name or "").strip()
@@ -201,9 +215,47 @@ class ManifestWriter:
             target_storey = next((s for s in storeys if getattr(s, "Name", "") == target_name), None)
 
             if not target_storey:
-                return ModificationResult(
-                    success=False, msg=f"IfcBuildingStorey '{target_name}' not found in model"
+                target_storey = self.model.create_entity(
+                    "IfcBuildingStorey",
+                    GlobalId=ifcopenshell.guid.new(),
+                    Name=target_name
                 )
+                # Hang the newly created storey in the spatial hierarchy
+                building = next(iter(self.model.by_type("IfcBuilding")), None)
+                if building:
+                    rel_aggregates = next(
+                        (r for r in self.model.by_type("IfcRelAggregates") if r.RelatingObject == building),
+                        None
+                    )
+                    if rel_aggregates:
+                        related = list(rel_aggregates.RelatedObjects)
+                        related.append(target_storey)
+                        rel_aggregates.RelatedObjects = related
+                    else:
+                        self.model.create_entity(
+                            "IfcRelAggregates",
+                            GlobalId=ifcopenshell.guid.new(),
+                            RelatingObject=building,
+                            RelatedObjects=[target_storey]
+                        )
+                else:
+                    project = next(iter(self.model.by_type("IfcProject")), None)
+                    if project:
+                        rel_aggregates = next(
+                            (r for r in self.model.by_type("IfcRelAggregates") if r.RelatingObject == project),
+                            None
+                        )
+                        if rel_aggregates:
+                            related = list(rel_aggregates.RelatedObjects)
+                            related.append(target_storey)
+                            rel_aggregates.RelatedObjects = related
+                        else:
+                            self.model.create_entity(
+                                "IfcRelAggregates",
+                                GlobalId=ifcopenshell.guid.new(),
+                                RelatingObject=project,
+                                RelatedObjects=[target_storey]
+                            )
 
             for rel in list(self.model.by_type("IfcRelContainedInSpatialStructure")):
                 if element in rel.RelatedElements:
