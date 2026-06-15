@@ -202,3 +202,69 @@ def test_analyze_guids(real_ifc_store):
         analysis = real_ifc_store.analyze_guids(guids_to_check)
         assert hasattr(analysis, "common_attributes")
         assert hasattr(analysis, "common_psets")
+
+
+def test_query_classification_matching(mock_ifc_store):
+    wall = mock_ifc_store._model.by_type("IfcWall")[0]
+    guid = wall.GlobalId
+
+    # Create classification reference and relate it to the wall
+    classification = mock_ifc_store._model.create_entity(
+        "IfcClassification", Name="DSR_System", Source="IDS Specification"
+    )
+    classification_reference = mock_ifc_store._model.create_entity(
+        "IfcClassificationReference",
+        Identification="SfB LG-07-02-01",
+        Name="SpecialWallClassification",
+        ReferencedSource=classification,
+    )
+    mock_ifc_store._model.create_entity(
+        "IfcRelAssociatesClassification",
+        GlobalId=ifcopenshell.guid.new(),
+        RelatingClassification=classification_reference,
+        RelatedObjects=[wall],
+    )
+
+    # 1. Query by classification code/Identification
+    query_code = ComplexQuery(
+        logical_op="AND",
+        criteria=[
+            FilterCriterion(
+                category="Classification",
+                operator=ComparisonOperator.EQUALS,
+                value="SfB LG-07-02-01",
+            )
+        ],
+    )
+    results = mock_ifc_store.execute_query(query_code)
+    assert guid in results
+
+    # 2. Query by classification reference name
+    query_name = ComplexQuery(
+        logical_op="AND",
+        criteria=[
+            FilterCriterion(
+                category="Classification",
+                operator=ComparisonOperator.EQUALS,
+                value="SpecialWallClassification",
+            )
+        ],
+    )
+    results = mock_ifc_store.execute_query(query_name)
+    assert guid in results
+
+    # 3. Query by classification system name and code
+    query_system_and_code = ComplexQuery(
+        logical_op="AND",
+        criteria=[
+            FilterCriterion(
+                category="Classification",
+                property_set="DSR_System",
+                operator=ComparisonOperator.EQUALS,
+                value="SfB LG-07-02-01",
+            )
+        ],
+    )
+    results = mock_ifc_store.execute_query(query_system_and_code)
+    assert guid in results
+

@@ -2,6 +2,8 @@ from typing import Any
 
 import ifcopenshell
 import ifcopenshell.util.element
+import ifcopenshell.util.classification
+
 
 from ..models.ifc import ComparisonOperator, ComplexQuery, FilterCriterion
 
@@ -89,26 +91,38 @@ class QueryEngine:
                     val = getattr(material, "Name", None)
 
         elif category == "classification":
-            # Scan classification associations
-            for rel in getattr(element, "HasAssociations", []):
-                if rel.is_a("IfcRelAssociatesClassification"):
-                    ref = getattr(rel, "RelatingClassification", None)
-                    if not ref:
-                        continue
+            refs = []
+            try:
+                refs = ifcopenshell.util.classification.get_references(element)
+            except Exception:
+                for rel in getattr(element, "HasAssociations", []):
+                    if rel.is_a("IfcRelAssociatesClassification"):
+                        ref = getattr(rel, "RelatingClassification", None)
+                        if ref:
+                            refs.append(ref)
 
-                    # We compare against the Classification Reference Name
-                    # or the System Name if specified in property_set
-                    val = getattr(ref, "Name", None)
+            for ref in refs:
+                system = None
+                try:
+                    system = ifcopenshell.util.classification.get_classification(ref)
+                except Exception:
                     system = getattr(ref, "ReferencedSource", None)
-                    system_name = getattr(system, "Name", None) if system else None
 
-                    # If property_set is used, it acts as a 'System' filter
-                    if criterion.property_set and system_name != criterion.property_set:
-                        continue
+                system_name = getattr(system, "Name", None) if system else None
 
-                    if self._compare(val, criterion.value, criterion.operator):
-                        return True
+                if criterion.property_set and system_name != criterion.property_set:
+                    continue
+
+                code = getattr(ref, "Identification", getattr(ref, "ItemReference", None))
+                name = getattr(ref, "Name", None)
+
+                # Matcher fix: Match code, reference name, or system name
+                if (self._compare(code, criterion.value, criterion.operator) or
+                    self._compare(name, criterion.value, criterion.operator) or
+                    self._compare(system_name, criterion.value, criterion.operator)):
+                    return True
             return False
+
 
         return self._compare(val, criterion.value, criterion.operator)
 
