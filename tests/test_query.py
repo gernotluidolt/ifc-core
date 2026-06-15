@@ -284,3 +284,80 @@ def test_query_classification_matching(mock_ifc_store):
     assert guid in results
 
 
+def test_query_new_operators_and_categories(mock_ifc_store):
+    wall = mock_ifc_store._model.by_type("IfcWall")[0]
+    guid = wall.GlobalId
+
+    # 1. Attribute filtering with StartsWith & EndsWith (case-insensitive)
+    wall.Name = "TestWallElement"
+    
+    # 2. Add an IfcElementQuantity
+    q_set = mock_ifc_store._model.create_entity("IfcElementQuantity", Name="BaseQuantities")
+    qty_length = mock_ifc_store._model.create_entity("IfcQuantityLength", Name="Length", LengthValue=12.5)
+    qty_volume = mock_ifc_store._model.create_entity("IfcQuantityVolume", Name="NetVolume", VolumeValue=45.2)
+    q_set.Quantities = [qty_length, qty_volume]
+    mock_ifc_store._model.create_entity(
+        "IfcRelDefinesByProperties",
+        GlobalId=ifcopenshell.guid.new(),
+        RelatingPropertyDefinition=q_set,
+        RelatedObjects=[wall]
+    )
+
+    # Starts with (case insensitive)
+    query_starts = ComplexQuery(
+        logical_op="AND",
+        criteria=[
+            FilterCriterion(
+                category="Attribute",
+                name="Name",
+                operator=ComparisonOperator.STARTS_WITH,
+                value="testwall",
+            )
+        ]
+    )
+    assert guid in mock_ifc_store.execute_query(query_starts)
+
+    # Ends with (case insensitive)
+    query_ends = ComplexQuery(
+        logical_op="AND",
+        criteria=[
+            FilterCriterion(
+                category="Attribute",
+                name="Name",
+                operator=ComparisonOperator.ENDS_WITH,
+                value="element",
+            )
+        ]
+    )
+    assert guid in mock_ifc_store.execute_query(query_ends)
+
+    # Quantity numeric comparison >=
+    query_qty_gte = ComplexQuery(
+        logical_op="AND",
+        criteria=[
+            FilterCriterion(
+                category="Quantity",
+                name="Length",
+                operator=ComparisonOperator.GREATER_THAN_EQUALS,
+                value=12.0,
+            )
+        ]
+    )
+    assert guid in mock_ifc_store.execute_query(query_qty_gte)
+
+    # Quantity numeric comparison <=
+    query_qty_lte = ComplexQuery(
+        logical_op="AND",
+        criteria=[
+            FilterCriterion(
+                category="Quantity",
+                name="NetVolume",
+                operator=ComparisonOperator.LESS_THAN_EQUALS,
+                value="45.2",
+            )
+        ]
+    )
+    assert guid in mock_ifc_store.execute_query(query_qty_lte)
+
+
+

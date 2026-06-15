@@ -24,9 +24,30 @@ class QueryEngine:
         val = None
 
         if category == "attribute":
-            info = element.get_info()
-            if criterion.name in info:
-                val = info[criterion.name]
+            val = getattr(element, criterion.name, None)
+            if val is None:
+                info = element.get_info()
+                if criterion.name in info:
+                    val = info[criterion.name]
+
+        elif category == "quantity":
+            for rel in getattr(element, "IsDefinedBy", []):
+                if rel.is_a("IfcRelDefinesByProperties"):
+                    prop_def = getattr(rel, "RelatingPropertyDefinition", None)
+                    if prop_def and prop_def.is_a("IfcElementQuantity"):
+                        for qty in getattr(prop_def, "Quantities", []):
+                            qty_name = getattr(qty, "Name", None)
+                            if qty_name == criterion.name:
+                                for val_attr in ("LengthValue", "AreaValue", "VolumeValue", "CountValue", "WeightValue", "TimeValue"):
+                                    qty_val = getattr(qty, val_attr, None)
+                                    if qty_val is not None:
+                                        val = qty_val
+                                        break
+                                if val is not None:
+                                    break
+                        if val is not None:
+                            break
+
 
         elif category == "pset":
             psets = ifcopenshell.util.element.get_psets(element)
@@ -134,8 +155,35 @@ class QueryEngine:
         if actual is None:
             return False
 
-        val_str = str(actual)
-        target_str = str(target)
+        # Try numeric comparison if applicable
+        if op in (
+            ComparisonOperator.EQUALS,
+            ComparisonOperator.NOT_EQUALS,
+            ComparisonOperator.GREATER_THAN,
+            ComparisonOperator.LESS_THAN,
+            ComparisonOperator.GREATER_THAN_EQUALS,
+            ComparisonOperator.LESS_THAN_EQUALS,
+        ):
+            try:
+                actual_f = float(actual)
+                target_f = float(target)
+                if op == ComparisonOperator.EQUALS:
+                    return actual_f == target_f
+                elif op == ComparisonOperator.NOT_EQUALS:
+                    return actual_f != target_f
+                elif op == ComparisonOperator.GREATER_THAN:
+                    return actual_f > target_f
+                elif op == ComparisonOperator.LESS_THAN:
+                    return actual_f < target_f
+                elif op == ComparisonOperator.GREATER_THAN_EQUALS:
+                    return actual_f >= target_f
+                elif op == ComparisonOperator.LESS_THAN_EQUALS:
+                    return actual_f <= target_f
+            except (ValueError, TypeError):
+                pass
+
+        val_str = str(actual).lower()
+        target_str = str(target).lower()
 
         if op == ComparisonOperator.EQUALS:
             return val_str == target_str
@@ -143,18 +191,13 @@ class QueryEngine:
             return val_str != target_str
         elif op == ComparisonOperator.CONTAINS:
             return target_str in val_str
-
-        try:
-            actual_f = float(actual)
-            target_f = float(target)
-            if op == ComparisonOperator.GREATER_THAN:
-                return actual_f > target_f
-            elif op == ComparisonOperator.LESS_THAN:
-                return actual_f < target_f
-        except ValueError:
-            pass
+        elif op == ComparisonOperator.STARTS_WITH:
+            return val_str.startswith(target_str)
+        elif op == ComparisonOperator.ENDS_WITH:
+            return val_str.endswith(target_str)
 
         return False
+
 
     def _evaluate_node(
         self, element, query: ComplexQuery | FilterCriterion

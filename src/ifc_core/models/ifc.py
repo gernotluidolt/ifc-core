@@ -124,7 +124,12 @@ class ComparisonOperator(str, Enum):
     NOT_EQUALS = "!="
     GREATER_THAN = ">"
     LESS_THAN = "<"
+    GREATER_THAN_EQUALS = ">="
+    LESS_THAN_EQUALS = "<="
     CONTAINS = "contains"
+    STARTS_WITH = "starts_with"
+    ENDS_WITH = "ends_with"
+
 
 
 class FilterCriterion(BaseModel):
