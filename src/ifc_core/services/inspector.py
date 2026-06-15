@@ -8,9 +8,11 @@ from ..models.ifc import SelectionAnalysis, SharedValue
 
 
 def analyze_guids(model: ifcopenshell.file, guids: list[str]) -> SelectionAnalysis:
+    import time
     if not guids:
         return SelectionAnalysis(common_attributes={}, common_psets={}, common_classifications={}, common_materials={})
 
+    start_lookup = time.perf_counter()
     elements = [
         model.by_guid(g)
         for g in guids
@@ -18,6 +20,8 @@ def analyze_guids(model: ifcopenshell.file, guids: list[str]) -> SelectionAnalys
     ]
     # filter out Nones
     elements = [e for e in elements if e is not None]
+    lookup_duration = (time.perf_counter() - start_lookup) * 1000
+    print(f"[Perf] analyze_guids | by_guid resolution for {len(guids)} elements took {lookup_duration:.2f}ms")
 
     if not elements:
         return SelectionAnalysis(common_attributes={}, common_psets={}, common_classifications={}, common_materials={})
@@ -80,7 +84,11 @@ def analyze_guids(model: ifcopenshell.file, guids: list[str]) -> SelectionAnalys
             common_attributes["Storey"] = SharedValue(value="<Mixed>", is_mixed=True, other_values=unique_storeys)
 
     # Intersect Psets
+    start_psets = time.perf_counter()
     all_psets = [ifcopenshell.util.element.get_psets(e) for e in elements]
+    psets_duration = (time.perf_counter() - start_psets) * 1000
+    print(f"[Perf] analyze_guids | get_psets extraction for {len(elements)} elements took {psets_duration:.2f}ms")
+    
     common_pset_names = set(all_psets[0].keys())
     for pset in all_psets[1:]:
         common_pset_names.intersection_update(pset.keys())
