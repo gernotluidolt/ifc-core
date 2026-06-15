@@ -324,3 +324,38 @@ def test_pattern_regex_validation(mock_ifc_store):
     assert len(results_invalid) == 1
     assert not results_invalid[0].success
     assert "does not match pattern" in results_invalid[0].msg
+
+
+def test_detailed_material_extraction(mock_ifc_store):
+    from ifc_core.services.inspector import analyze_guids
+    
+    # Let's create an IfcMaterialLayerSetUsage
+    model = mock_ifc_store._model
+    wall = model.by_type("IfcWall")[0]
+    
+    # Clean old material associations
+    for assoc in list(getattr(wall, "HasAssociations", [])):
+        if assoc.is_a("IfcRelAssociatesMaterial"):
+            model.remove(assoc)
+            
+    material_1 = model.create_entity("IfcMaterial", Name="Layer1")
+    material_2 = model.create_entity("IfcMaterial", Name="Layer2")
+    
+    layer_1 = model.create_entity("IfcMaterialLayer", Material=material_1, LayerThickness=150.0)
+    layer_2 = model.create_entity("IfcMaterialLayer", Material=material_2, LayerThickness=50.0)
+    
+    layer_set = model.create_entity("IfcMaterialLayerSet", MaterialLayers=[layer_1, layer_2], LayerSetName="CompositeWall")
+    layer_set_usage = model.create_entity("IfcMaterialLayerSetUsage", ForLayerSet=layer_set, LayerSetDirection="AXIS2", DirectionSense="POSITIVE", OffsetFromReferenceLine=0.0)
+    
+    assoc = model.create_entity("IfcRelAssociatesMaterial", GlobalId=ifcopenshell.guid.new(), RelatingMaterial=layer_set_usage, RelatedObjects=[wall])
+    
+    analysis = analyze_guids(model, [wall.GlobalId])
+    assert "CompositeWall" in analysis.common_materials
+    mat_val = analysis.common_materials["CompositeWall"]
+    assert mat_val.is_mixed is False
+    assert mat_val.structure is not None
+    assert mat_val.structure["type"] == "layer_set"
+    assert len(mat_val.structure["layers"]) == 2
+    assert mat_val.structure["layers"][0]["name"] == "Layer1"
+    assert mat_val.structure["layers"][0]["thickness"] == 150.0
+

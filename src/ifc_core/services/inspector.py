@@ -6,6 +6,113 @@ from typing import Any
 
 from ..models.ifc import SelectionAnalysis, SharedValue
 
+def extract_material_layer_set(layer_set):
+    if not layer_set:
+        return None
+    layers = getattr(layer_set, "MaterialLayers", []) or []
+    layer_data = []
+    for layer in layers:
+        mat = getattr(layer, "Material", None)
+        mat_name = getattr(mat, "Name", "Unnamed") if mat else "Unnamed"
+        thickness = getattr(layer, "LayerThickness", None)
+        layer_data.append({
+            "name": mat_name,
+            "thickness": thickness
+        })
+    return {
+        "type": "layer_set",
+        "name": getattr(layer_set, "MaterialSetName", None) or getattr(layer_set, "LayerSetName", None) or "Unnamed Layer Set",
+        "layers": layer_data
+    }
+
+def extract_material_profile_set(profile_set):
+    if not profile_set:
+        return None
+    profiles = getattr(profile_set, "MaterialProfiles", []) or []
+    profile_data = []
+    for profile in profiles:
+        mat = getattr(profile, "Material", None)
+        mat_name = getattr(mat, "Name", "Unnamed") if mat else "Unnamed"
+        profile_data.append({
+            "name": mat_name
+        })
+    return {
+        "type": "profile_set",
+        "name": getattr(profile_set, "Name", None) or "Unnamed Profile Set",
+        "profiles": profile_data
+    }
+
+def extract_material_data(mat_info):
+    if not mat_info:
+        return None
+
+    if isinstance(mat_info, (list, tuple)):
+        sub_mats = []
+        for m in mat_info:
+            data = extract_material_data(m)
+            if data:
+                sub_mats.append(data)
+        if not sub_mats:
+            return None
+        if len(sub_mats) == 1:
+            return sub_mats[0]
+        return {
+            "type": "list",
+            "materials": sub_mats
+        }
+
+    if not hasattr(mat_info, "is_a"):
+        return None
+
+    if mat_info.is_a("IfcMaterialLayerSetUsage"):
+        layer_set = getattr(mat_info, "ForLayerSet", None)
+        return extract_material_layer_set(layer_set)
+    elif mat_info.is_a("IfcMaterialLayerSet"):
+        return extract_material_layer_set(mat_info)
+    elif mat_info.is_a("IfcMaterialProfileSetUsage"):
+        profile_set = getattr(mat_info, "ForProfileSet", None)
+        return extract_material_profile_set(profile_set)
+    elif mat_info.is_a("IfcMaterialProfileSet"):
+        return extract_material_profile_set(mat_info)
+    elif mat_info.is_a("IfcMaterialList"):
+        materials = getattr(mat_info, "Materials", []) or []
+        sub_mats = [extract_material_data(m) for m in materials if m]
+        return {
+            "type": "list",
+            "materials": [m for m in sub_mats if m]
+        }
+    elif mat_info.is_a("IfcMaterialConstituentSet"):
+        constituents = getattr(mat_info, "MaterialConstituents", []) or []
+        sub_mats = []
+        for c in constituents:
+            mat = getattr(c, "Material", None)
+            if mat:
+                sub_mats.append(extract_material_data(mat))
+        return {
+            "type": "list",
+            "materials": [m for m in sub_mats if m]
+        }
+    elif mat_info.is_a("IfcMaterialConstituent"):
+        mat = getattr(mat_info, "Material", None)
+        if mat:
+            return extract_material_data(mat)
+        return {"type": "single", "name": getattr(mat_info, "Name", "Unnamed")}
+    elif mat_info.is_a("IfcMaterialProfile"):
+        mat = getattr(mat_info, "Material", None)
+        if mat:
+            return extract_material_data(mat)
+        return {"type": "single", "name": getattr(mat_info, "Name", "Unnamed")}
+    elif mat_info.is_a("IfcMaterial"):
+        return {
+            "type": "single",
+            "name": getattr(mat_info, "Name", "Unnamed")
+        }
+
+    return {
+        "type": "single",
+        "name": getattr(mat_info, "Name", "Unnamed") or mat_info.is_a()
+    }
+
 
 def analyze_guids(model: ifcopenshell.file, guids: list[str]) -> SelectionAnalysis:
     import time
@@ -160,30 +267,46 @@ def analyze_guids(model: ifcopenshell.file, guids: list[str]) -> SelectionAnalys
             common_classifications[system_name] = SharedValue(value=str(codes[0]), is_mixed=False)
 
     # Intersect Materials
-    all_materials_data = []
+    element_structures = []
     for e in elements:
         mat_info = ifcopenshell.util.element.get_material(e)
-        # get_material can return a single material element, a list, or a material layer set etc.
-        # We simplify to a set of names present on the element
-        names = set()
-        if mat_info:
-            if isinstance(mat_info, (list, tuple)):
-                for m in mat_info:
-                    names.add(str(getattr(m, "Name", "Unnamed")))
-            elif hasattr(mat_info, "is_a") and mat_info.is_a("IfcMaterialLayerSetUsage"):
-                for layer in mat_info.ForLayerSet.MaterialLayers:
-                    names.add(str(getattr(layer.Material, "Name", "Unnamed")))
-            else:
-                names.add(str(getattr(mat_info, "Name", "Unnamed")))
-        all_materials_data.append(names)
+        extracted = extract_material_data(mat_info)
+        element_structures.append(extracted)
 
-    common_material_names = set(all_materials_data[0]) if all_materials_data else set()
-    for names in all_materials_data[1:]:
-        common_material_names.intersection_update(names)
+    unique_structures = []
+    for struct in element_structures:
+        if struct is not None and struct not in unique_structures:
+            unique_structures.append(struct)
 
     common_materials = {}
-    for mat_name in common_material_names:
-        common_materials[mat_name] = SharedValue(value=mat_name, is_mixed=False)
+
+    if len(unique_structures) == 1:
+        struct = unique_structures[0]
+        # Resolve a name for the dictionary key
+        if struct.get("type") == "single":
+            name = struct.get("name", "Unnamed")
+        else:
+            name = struct.get("name") or (struct.get("materials", [{}])[0].get("name", "Unnamed") if struct.get("materials") else "Composite")
+        common_materials[name] = SharedValue(
+            value=name,
+            is_mixed=False,
+            structure=struct
+        )
+    elif len(unique_structures) > 1:
+        names = []
+        for struct in unique_structures:
+            if struct.get("type") == "single":
+                n = struct.get("name", "Unnamed")
+            else:
+                n = struct.get("name") or (struct.get("materials", [{}])[0].get("name", "Unnamed") if struct.get("materials") else "Composite")
+            names.append(n)
+        
+        common_materials["Material"] = SharedValue(
+            value="<Mixed>",
+            is_mixed=True,
+            other_values=names,
+            structure=None
+        )
 
     return SelectionAnalysis(
         common_attributes=common_attributes,
