@@ -37,7 +37,7 @@ def _map_facet_to_requirement(facet) -> IdsRequirement:
 
     # ifctester may represent restrictions either in "restriction" or in a dict-like "value"
     restriction = getattr(facet, "restriction", None)
-    if restriction is None and isinstance(raw_value, dict):
+    if restriction is None and (isinstance(raw_value, dict) or raw_value.__class__.__name__ == "Restriction"):
         restriction = raw_value
 
     # For entity facets, class names are commonly stored in the "name" field.
@@ -128,6 +128,7 @@ def _map_facet_to_requirement(facet) -> IdsRequirement:
         instructions=getattr(facet, "instructions", None),
         options=options,
         data_type=data_type,
+        raw_data_type=raw_data_type,
         min_inclusive=min_val,
         max_inclusive=max_val,
         cardinality=getattr(facet, "cardinality", None),

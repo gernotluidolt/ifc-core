@@ -18,6 +18,7 @@ class IdsRequirement(BaseModel):
     instructions: str | None = None
     options: list[str] = Field(default_factory=list)  # ["Internal", "External"]
     data_type: str | None = None  # e.g., "decimal", "integer", "boolean", "string"
+    raw_data_type: str | None = None
     min_inclusive: float | None = None
     max_inclusive: float | None = None
     cardinality: str | None = None
@@ -48,6 +49,7 @@ class ConcreteRequirement(BaseModel):
     value: Any
     property_set: str | None = None
     data_type: str | None = None
+    raw_data_type: str | None = None
     relation: str | None = None
     expected_value: str | None = None
     pattern: str | None = None

@@ -107,6 +107,29 @@ class ManifestWriter:
 
         cast_val = cast_value_by_type(req.value, getattr(req, "data_type", None))
 
+        # Wrap in exact IFC type if raw_data_type or data_type is provided
+        dt_str = getattr(req, "raw_data_type", None) or getattr(req, "data_type", None)
+        if dt_str:
+            dt_str = str(dt_str).strip()
+            if not dt_str.lower().startswith("ifc"):
+                dt_str = "Ifc" + dt_str
+            try:
+                # Special handle for boolean/logical string casting
+                if dt_str.lower() == "ifclogical" and isinstance(cast_val, str):
+                    if cast_val.lower() in ("true", "1", "yes"):
+                        cast_val = True
+                    elif cast_val.lower() in ("false", "0", "no"):
+                        cast_val = False
+                    else:
+                        cast_val = "UNKNOWN"
+                elif dt_str.lower() == "ifcboolean" and isinstance(cast_val, str):
+                    cast_val = cast_val.lower() in ("true", "1", "yes")
+
+                cast_val = self.model.create_entity(dt_str, cast_val)
+            except Exception:
+                # Fallback to cast_val if wrapper creation fails
+                pass
+
         ifcopenshell.api.run(
             "pset.edit_pset", self.model, pset=pset, properties={req.name: cast_val}
         )
