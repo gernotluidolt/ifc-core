@@ -3,29 +3,36 @@ from typing import Any
 import ifcopenshell
 from ...models.ifc import PSetSummary
 
-def get_psets(model: ifcopenshell.file) -> list[PSetSummary]:
+def get_psets(model: ifcopenshell.file, element_guids: list[str] | set[str] | None = None) -> list[PSetSummary]:
     """List unique property sets, their parameters, and unique values with counts."""
     # Structure: pset_name -> prop_name -> value -> element_count
     data: dict[str, dict[str, dict[Any, int]]] = defaultdict(
         lambda: defaultdict(lambda: defaultdict(int))
     )
     pset_elements: dict[str, set[str]] = defaultdict(set)
+    target_guids = set(element_guids) if element_guids else None
 
     for pset in model.by_type("IfcPropertySet"):
         pset_name = str(getattr(pset, "Name", "") or "Unnamed")
         
         # Find all elements assigned to this PSet
-        element_guids = []
-        for rel in getattr(pset, "PropertyDefinitionOf", []):
+        elements_list = []
+        rels = getattr(pset, "DefinesOccurrence", None) or getattr(pset, "PropertyDefinitionOf", [])
+        for rel in rels:
             if rel.is_a("IfcRelDefinesByProperties"):
                 related = getattr(rel, "RelatedObjects", [])
-                element_guids.extend([getattr(e, "GlobalId", None) for e in related if getattr(e, "GlobalId", None)])
+                elements_list.extend([getattr(e, "GlobalId", None) for e in related if getattr(e, "GlobalId", None)])
         
-        if not element_guids:
+        if not elements_list:
             continue
             
-        pset_elements[pset_name].update(element_guids)
-        el_count = len(element_guids)
+        if target_guids:
+            elements_list = [g for g in elements_list if g in target_guids]
+            if not elements_list:
+                continue
+            
+        pset_elements[pset_name].update(elements_list)
+        el_count = len(elements_list)
 
         for prop in getattr(pset, "HasProperties", []):
             if not prop.is_a("IfcPropertySingleValue"):

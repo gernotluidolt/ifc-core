@@ -25,7 +25,9 @@ class DiscoveryAggregator:
             self._cache["entity_counts"] = get_entity_counts(self.model)
         return self._cache["entity_counts"]
 
-    def get_psets(self):
+    def get_psets(self, element_guids: list[str] | None = None):
+        if element_guids is not None:
+            return get_psets(self.model, element_guids)
         if "psets" not in self._cache:
             self._cache["psets"] = get_psets(self.model)
         return self._cache["psets"]

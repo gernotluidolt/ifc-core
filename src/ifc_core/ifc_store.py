@@ -102,9 +102,9 @@ class IfcStore:
         """Return spatial hierarchy nodes for UI tree views."""
         return self._discovery.get_spatial_tree(parent_guid)
 
-    def get_psets(self) -> list[PSetSummary]:
+    def get_psets(self, element_guids: list[str] | None = None) -> list[PSetSummary]:
         """List unique property sets with occurrence counts and parameter names."""
-        return self._discovery.get_psets()
+        return self._discovery.get_psets(element_guids)
 
     def get_materials(self) -> list[CountedItem]:
         """List known materials with usage counts across elements."""
