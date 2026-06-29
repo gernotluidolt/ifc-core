@@ -23,7 +23,6 @@ from .models.ifc import (
     SpatialNode,
 )
 from .services.discovery import DiscoveryAggregator
-from .services.groups.base import AbstractGroupRepository
 from .services.inspector import analyze_guids
 from .services.metadata import get_model_info
 from .services.query import QueryEngine
@@ -55,12 +54,7 @@ class IfcStore:
         else:
             raise ValueError("Either 'path' or 'model' must be provided to IfcStore")
         self._mapping_cache: dict[str, MappingStatus] = {}
-        self.groups: AbstractGroupRepository | None = None
         self._discovery = DiscoveryAggregator(self._model)
-
-    def bind_groups(self, repo: AbstractGroupRepository):
-        """Inject a grouping storage backend into the store."""
-        self.groups = repo
 
     def _clear_cache(self):
         """Invalidates the lazy cache when the model is modified."""
