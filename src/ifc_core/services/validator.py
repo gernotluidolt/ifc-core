@@ -1,9 +1,11 @@
 from typing import Any
+import re
 
 import ifcopenshell.util.element
 
 from ..models.ids import IdsRequirement, IdsSpecification
 from ..models.ifc import MappingState, MappingStatus
+from .inspector import extract_material_data
 
 
 def _get_property_value(element, pset_name: str, prop_name: str) -> Any:
@@ -52,7 +54,6 @@ def _check_value_against_options(value: Any, req: IdsRequirement) -> bool:
     # 2. Extract options dumped into value string by ifctester (e.g. "{'enumeration': ['...']}")
     if req.value and isinstance(req.value, str):
         if "'enumeration':" in req.value:
-            import re
             match = re.search(r"'enumeration':\s*\[(.*?)\]", req.value)
             if match:
                 # 'A', 'B' -> split and strip
@@ -80,9 +81,66 @@ def _check_value_against_options(value: Any, req: IdsRequirement) -> bool:
     return True
 
 
+def _get_requirement_values(element, req: IdsRequirement) -> list[Any]:
+    vals = []
+    req_type = req.type.lower()
+    try:
+        if req_type == "attribute":
+            val = _get_attribute_value(element, req.name)
+            if val is not None:
+                vals.append(val)
+        elif req_type == "property":
+            val = _get_property_value(element, req.property_set, req.name)
+            if val is not None:
+                vals.append(val)
+        elif req_type == "partof": # Storey
+            for rel in list(getattr(element, "ContainedInStructure", []) or []):
+                if rel.is_a("IfcRelContainedInSpatialStructure") and rel.RelatingStructure:
+                    vals.append(getattr(rel.RelatingStructure, "Name", ""))
+                    break
+        elif req_type == "material":
+            mat_info = ifcopenshell.util.element.get_material(element)
+            extracted = extract_material_data(mat_info)
+            if extracted:
+                if extracted.get("type") == "single":
+                    vals.append(extracted.get("name"))
+                elif extracted.get("type") == "list":
+                    for sub in extracted.get("materials", []):
+                        vals.append(sub.get("name"))
+                elif extracted.get("type") == "layer_set":
+                    for layer in extracted.get("layers", []):
+                        vals.append(layer.get("name"))
+                elif extracted.get("type") == "profile_set":
+                    for prof in extracted.get("profiles", []):
+                        vals.append(prof.get("name"))
+        elif req_type == "classification":
+            import ifcopenshell.util.classification
+            try:
+                refs = ifcopenshell.util.classification.get_references(element)
+                for ref in refs:
+                    try:
+                        system = ifcopenshell.util.classification.get_classification(ref)
+                        system_name = getattr(system, "Name", "") if system else ""
+                        if not system_name and ref.is_a("IfcClassification"):
+                            system_name = getattr(ref, "Name", "")
+                        
+                        if system_name.lower() == (req.name or "").lower():
+                            code = getattr(ref, "Identification", getattr(ref, "ItemReference", None))
+                            name = getattr(ref, "Name", None)
+                            if code is not None: vals.append(code)
+                            if name is not None: vals.append(name)
+                    except Exception:
+                        continue
+            except Exception:
+                pass
+    except Exception:
+        pass
+    return vals
+
+
 def _is_applicable(element, applicability: list[IdsRequirement]) -> bool:
     if not applicability:
-        return True  # Applies to all if empty?
+        return True
 
     for req in applicability:
         req_type = req.type.lower()
@@ -92,15 +150,12 @@ def _is_applicable(element, applicability: list[IdsRequirement]) -> bool:
                 continue
             if not element.is_a(req.name):
                 return False
-
-        elif req_type == "property":
-            val = _get_property_value(element, req.property_set, req.name)
-            if not _check_value_against_options(val, req):
+        else:
+            vals = _get_requirement_values(element, req)
+            valid_vals = [v for v in vals if v is not None and str(v).strip() != "" and str(v) != "<Mixed>"]
+            if not valid_vals:
                 return False
-
-        elif req_type == "attribute":
-            val = _get_attribute_value(element, req.name)
-            if not _check_value_against_options(val, req):
+            if not any(_check_value_against_options(v, req) for v in valid_vals):
                 return False
 
     return True
@@ -124,19 +179,14 @@ def check_mapping_status(element, spec: IdsSpecification) -> MappingStatus:
 
     # 2. Check Requirements
     for req in spec.requirements:
-        req_type = req.type.lower()
-        val = None
+        vals = _get_requirement_values(element, req)
+        valid_vals = [v for v in vals if v is not None and str(v).strip() != "" and str(v) != "<Mixed>"]
 
-        if req_type == "property":
-            val = _get_property_value(element, req.property_set, req.name)
-        elif req_type == "attribute":
-            val = _get_attribute_value(element, req.name)
-        # Note: Material and Classification handling can be added here
-
-        if val is None:
+        if not valid_vals:
             missing.append(req)
-        elif not _check_value_against_options(val, req):
-            invalid.append(req)
+        else:
+            if not any(_check_value_against_options(v, req) for v in valid_vals):
+                invalid.append(req)
 
     if missing:
         state = MappingState.INCOMPLETE
