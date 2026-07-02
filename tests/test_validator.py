@@ -174,3 +174,89 @@ def test_check_value_against_options_range_failures_without_options_gate():
 
     assert not validator._check_value_against_options(1, min_req)
     assert not validator._check_value_against_options(11, max_req)
+
+
+def test_check_mapping_status_compliant_when_optional_property_missing(mock_ifc_store):
+    wall = mock_ifc_store._model.by_type("IfcWall")[0]
+    spec = IdsSpecification(
+        name="OptionalMissing",
+        applicability=[IdsRequirement(type="entity", name="IfcWall")],
+        requirements=[
+            IdsRequirement(
+                type="property",
+                name="DefinitelyMissing",
+                property_set="Pset_WallCommon",
+                value="True",
+                cardinality="optional",
+            )
+        ],
+    )
+
+    status = check_mapping_status(wall, spec)
+    assert status.state == MappingState.COMPLIANT
+    assert status.missing_requirements == []
+    assert status.invalid_requirements == []
+
+
+def test_check_mapping_status_compliant_when_optional_property_present_and_valid(mock_ifc_store):
+    wall = mock_ifc_store._model.by_type("IfcWall")[0]
+    pset = ifcopenshell.api.run(
+        "pset.add_pset", mock_ifc_store._model, product=wall, name="Pset_WallCommon"
+    )
+    ifcopenshell.api.run(
+        "pset.edit_pset",
+        mock_ifc_store._model,
+        pset=pset,
+        properties={"LoadBearing": True},
+    )
+
+    spec = IdsSpecification(
+        name="OptionalValid",
+        applicability=[IdsRequirement(type="entity", name="IfcWall")],
+        requirements=[
+            IdsRequirement(
+                type="property",
+                name="LoadBearing",
+                property_set="Pset_WallCommon",
+                value="True",
+                cardinality="optional",
+            )
+        ],
+    )
+
+    status = check_mapping_status(wall, spec)
+    assert status.state == MappingState.COMPLIANT
+    assert status.missing_requirements == []
+    assert status.invalid_requirements == []
+
+
+def test_check_mapping_status_compliant_when_optional_property_present_and_invalid(mock_ifc_store):
+    wall = mock_ifc_store._model.by_type("IfcWall")[0]
+    pset = ifcopenshell.api.run(
+        "pset.add_pset", mock_ifc_store._model, product=wall, name="Pset_WallCommon"
+    )
+    ifcopenshell.api.run(
+        "pset.edit_pset",
+        mock_ifc_store._model,
+        pset=pset,
+        properties={"LoadBearing": False},
+    )
+
+    spec = IdsSpecification(
+        name="OptionalInvalidButIgnored",
+        applicability=[IdsRequirement(type="entity", name="IfcWall")],
+        requirements=[
+            IdsRequirement(
+                type="property",
+                name="LoadBearing",
+                property_set="Pset_WallCommon",
+                value="True",
+                cardinality="optional",
+            )
+        ],
+    )
+
+    status = check_mapping_status(wall, spec)
+    assert status.state == MappingState.COMPLIANT
+    assert status.missing_requirements == []
+    assert status.invalid_requirements == []

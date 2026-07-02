@@ -183,10 +183,12 @@ def check_mapping_status(element, spec: IdsSpecification) -> MappingStatus:
         valid_vals = [v for v in vals if v is not None and str(v).strip() != "" and str(v) != "<Mixed>"]
 
         if not valid_vals:
-            missing.append(req)
+            if getattr(req, "cardinality", None) != "optional":
+                missing.append(req)
         else:
             if not any(_check_value_against_options(v, req) for v in valid_vals):
-                invalid.append(req)
+                if getattr(req, "cardinality", None) != "optional":
+                    invalid.append(req)
 
     if missing:
         state = MappingState.INCOMPLETE
