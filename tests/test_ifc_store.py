@@ -174,7 +174,7 @@ def test_ifc_store_info_property_uses_metadata_service(monkeypatch, mock_ifc_sto
         schema_version = "IFC4"
         author = "test"
 
-    monkeypatch.setattr("ifc_core.ifc_store.get_model_info", lambda model: _Meta())
+    monkeypatch.setattr("ifc_core.ifc_store.get_model_info", lambda model, *args, **kwargs: _Meta())
 
     info = mock_ifc_store.info
     assert info.schema_version == "IFC4"

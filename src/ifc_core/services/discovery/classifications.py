@@ -78,17 +78,21 @@ def get_classification_tree(model: ifcopenshell.file) -> ClassificationTree:
                     "type": "element",
                     "name": str(name),
                     "id": f"el::{elem.id()}",
+                    "guid": str(getattr(elem, "GlobalId", None) or ""),
                     "children": [],
                 }
             )
 
     all_named_elements = set()
+    product_guid_map = {}
     for product in model.by_type("IfcProduct"):
         if getattr(product, "is_a", lambda: "")() == "IfcProject":
             continue
         name = getattr(product, "Name", None) or getattr(product, "GlobalId", None)
         if name:
-            all_named_elements.add(str(name))
+            name_str = str(name)
+            all_named_elements.add(name_str)
+            product_guid_map[name_str] = getattr(product, "GlobalId", None)
 
     unclassified = sorted(all_named_elements - classified_elements)
     if unclassified:
@@ -97,7 +101,13 @@ def get_classification_tree(model: ifcopenshell.file) -> ClassificationTree:
             "name": "(unclassified)",
             "id": "sys::unclassified",
             "children": [
-                {"type": "element", "name": name, "id": f"el::{name}", "children": []}
+                {
+                    "type": "element",
+                    "name": name,
+                    "id": f"el::{name}",
+                    "guid": str(product_guid_map.get(name) or ""),
+                    "children": [],
+                }
                 for name in unclassified
             ],
         }
@@ -111,6 +121,8 @@ def get_classification_tree(model: ifcopenshell.file) -> ClassificationTree:
             "name": str(node.get("name") or ""),
             "children": [_normalize(child) for child in children],
         }
+        if "guid" in node:
+            out["guid"] = str(node.get("guid") or "")
         if "count" in node and node.get("count") is not None:
             out["count"] = int(node["count"])
         return out

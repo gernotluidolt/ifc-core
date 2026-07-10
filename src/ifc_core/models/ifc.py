@@ -93,6 +93,7 @@ class ClassificationNode(BaseModel):
     id: str
     type: str  # system, reference, element
     name: str
+    guid: str | None = None
     count: int | None = None
     children: list["ClassificationNode"] = []
 
