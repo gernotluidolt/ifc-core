@@ -283,6 +283,21 @@ def test_query_classification_matching(mock_ifc_store):
     results = mock_ifc_store.execute_query(query_system_only)
     assert guid in results
 
+    # 5. Query by combined classification reference code and name
+    query_combined = ComplexQuery(
+        logical_op="AND",
+        criteria=[
+            FilterCriterion(
+                category="Classification",
+                property_set="DSR_System",
+                operator=ComparisonOperator.EQUALS,
+                value="SfB LG-07-02-01 SpecialWallClassification",
+            )
+        ],
+    )
+    results = mock_ifc_store.execute_query(query_combined)
+    assert guid in results
+
 
 def test_query_new_operators_and_categories(mock_ifc_store):
     wall = mock_ifc_store._model.by_type("IfcWall")[0]

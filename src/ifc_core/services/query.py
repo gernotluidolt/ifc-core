@@ -140,10 +140,16 @@ class QueryEngine:
 
                 code = getattr(ref, "Identification", getattr(ref, "ItemReference", None))
                 name = getattr(ref, "Name", None)
+                combined_label = (
+                    f"{code} {name}"
+                    if code and name and str(code) != str(name)
+                    else (code or name)
+                )
 
-                # Matcher fix: Match code, reference name, or system name
+                # Matcher fix: Match code, reference name, combined label, or system name
                 if (self._compare(code, criterion.value, criterion.operator) or
                     self._compare(name, criterion.value, criterion.operator) or
+                    self._compare(combined_label, criterion.value, criterion.operator) or
                     self._compare(system_name, criterion.value, criterion.operator)):
                     return True
             return False
